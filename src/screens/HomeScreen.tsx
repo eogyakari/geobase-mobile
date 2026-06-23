@@ -15,6 +15,9 @@ import ProfileScreen from './ProfileScreen'
 
 const Tab = createBottomTabNavigator()
 
+// Roles allowed to see the Project Analytics quick action
+const ANALYTICS_ROLES = ['CEO', 'Admin', 'Finance Director']
+
 function DashboardTab({ profile, navigation }: { profile: any; navigation: any }) {
   const [stats, setStats] = useState({ projects: 0, requests: 0, notifications: 0 })
 
@@ -34,6 +37,21 @@ function DashboardTab({ profile, navigation }: { profile: any; navigation: any }
     load()
   load()
 }, [profile]))
+
+  const canViewAnalytics = ANALYTICS_ROLES.includes(profile?.role_name)
+
+  // tab: true items live inside this Tab.Navigator → navigation.navigate()
+  // tab: false items are root-stack screens (outside the tab bar) → navigation.getParent()?.navigate()
+  const quickActions = [
+    { label: 'New Request',   icon: '📋', target: 'Requests',    isStack: false },
+    { label: 'Site Log',      icon: '🏗️', target: 'Site Log',    isStack: false },
+    { label: 'Chat',          icon: '💬', target: 'Chat',        isStack: false },
+    { label: 'Notifications', icon: '🔔', target: 'Notifications', isStack: false },
+    { label: 'Profile',       icon: '👤', target: 'Profile',     isStack: false },
+    ...(canViewAnalytics
+      ? [{ label: 'Project Analytics', icon: '📊', target: 'ProjectAnalytics', isStack: true }]
+      : []),
+  ]
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -69,22 +87,20 @@ function DashboardTab({ profile, navigation }: { profile: any; navigation: any }
 
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsGrid}>
-          {[
-  { label: 'New Request', icon: '📋', tab: 'Requests' },
-  { label: 'Site Log', icon: '🏗️', tab: 'Site Log' },
-  { label: 'Chat', icon: '💬', tab: 'Chat' },
-  { label: 'Notifications', icon: '🔔', tab: 'Notifications' },
-  { label: 'Profile', icon: '👤', tab: 'Profile' },
-].map((a) => (
-  <TouchableOpacity
-    key={a.label}
-    style={styles.actionCard}
-    onPress={() => navigation.navigate(a.tab)}
-  >
-    <Text style={styles.actionIcon}>{a.icon}</Text>
-    <Text style={styles.actionLabel}>{a.label}</Text>
-  </TouchableOpacity>
-))}
+          {quickActions.map((a) => (
+            <TouchableOpacity
+              key={a.label}
+              style={styles.actionCard}
+              onPress={() =>
+                a.isStack
+                  ? navigation.getParent()?.navigate(a.target)
+                  : navigation.navigate(a.target)
+              }
+            >
+              <Text style={styles.actionIcon}>{a.icon}</Text>
+              <Text style={styles.actionLabel}>{a.label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         <TouchableOpacity style={styles.signOutBtn} onPress={() => supabase.auth.signOut()}>
