@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, KeyboardAvoidingView,
-  Platform, ScrollView, Alert,
+  Platform, ScrollView, Alert, Image,
 } from 'react-native'
 import { supabase } from '../lib/supabase'
 
@@ -60,9 +60,11 @@ export default function LoginScreen() {
       >
         {/* Logo mark */}
         <View style={styles.logoContainer}>
-          <View style={styles.logoBox}>
-            <Text style={styles.logoText}>G</Text>
-          </View>
+          <Image
+            source={require('../../assets/adaptive-icon.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.brandName}>GEOBASE</Text>
           <Text style={styles.brandSub}>ERP</Text>
         </View>
@@ -144,21 +146,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
   },
-  logoBox: {
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    backgroundColor: '#152019',
-    borderWidth: 1,
-    borderColor: '#c9a84c44',
-    alignItems: 'center',
-    justifyContent: 'center',
+  logoImage: {
+    width: 88,
+    height: 88,
     marginBottom: 14,
-  },
-  logoText: {
-    fontSize: 38,
-    fontWeight: '800',
-    color: GOLD,
   },
   brandName: {
     fontSize: 22,
