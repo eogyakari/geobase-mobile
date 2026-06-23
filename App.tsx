@@ -6,6 +6,7 @@ import { View, ActivityIndicator } from 'react-native'
 import { supabase } from './src/lib/supabase'
 import LoginScreen from './src/screens/LoginScreen'
 import HomeScreen from './src/screens/HomeScreen'
+import ProjectAnalyticsScreen from './src/screens/ProjectAnalyticsScreen'
 import { savePushToken } from './src/lib/notifications'
 
 const Stack = createNativeStackNavigator()
@@ -42,7 +43,10 @@ useEffect(() => {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {session ? (
-          <Stack.Screen name="Home" component={HomeScreen} />
+          <>
+            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="ProjectAnalytics" component={ProjectAnalyticsScreen} />
+          </>
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} />
         )}
