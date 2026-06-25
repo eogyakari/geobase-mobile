@@ -42,6 +42,21 @@ const PRIORITY_COLOR: Record<string, string> = {
   Critical: '#e05c5c',
 }
 
+const ASSIGNEE_ROLE_MAP: Record<string, string[]> = {
+  Leave: ['HR Manager', 'Admin'],
+  'Petty Cash': ['Finance Director', 'Accountant'],
+  Material: ['Site Supervisor', 'Project Manager', 'Procurement Officer'],
+  // General intentionally unmapped — stays unfiltered
+}
+
+const ATTACHMENT_REQUIRED_TYPES = new Set(['Leave', 'Petty Cash', 'Material'])
+
+function getAssigneePool(requestType: string, allProfiles: Profile[]) {
+  const allowedRoles = ASSIGNEE_ROLE_MAP[requestType]
+  if (!allowedRoles) return allProfiles
+  return allProfiles.filter(p => allowedRoles.includes(p.role_name ?? ''))
+}
+
 function buildRequestExtras(requestType: string, s: { leaveFrom: string; leaveTo: string; amount: string }) {
   let start_date: string | null = null
   let end_date: string | null = null
@@ -58,7 +73,7 @@ function buildRequestExtras(requestType: string, s: { leaveFrom: string; leaveTo
 }
 
 export default function RequestsScreen() {
-  const [tab, setTab] = useState<'mine' | 'inbox'>('mine')
+  const [tab, setTab] = useState<'mine' | 'inbox' | 'complete'>('mine')
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [requests, setRequests] = useState<Request[]>([])
   const [loading, setLoading] = useState(true)
@@ -77,6 +92,11 @@ export default function RequestsScreen() {
   const [leaveFrom, setLeaveFrom] = useState('')
   const [leaveTo, setLeaveTo] = useState('')
   const [amount, setAmount] = useState('')
+  const [completionMode, setCompletionMode] = useState<'self' | 'assign'>('self')
+  const [assigneeId, setAssigneeId] = useState('')
+  const [showAssigneePicker, setShowAssigneePicker] = useState(false)
+  const [completionNotes, setCompletionNotes] = useState('')
+  const [completing, setCompleting] = useState(false)
 
 
   const loadData = async () => {
@@ -95,10 +115,10 @@ export default function RequestsScreen() {
 
       const { data: profileList } = await supabase
         .from('profiles')
-        .select('id, full_name, organization_id')
+        .select('id, full_name, organization_id, roles(name)')
         .eq('organization_id', myProfile.organization_id)
         .neq('id', user.id)
-      setOrgProfiles(profileList ?? [])
+      setOrgProfiles((profileList ?? []).map((p: any) => ({ ...p, role_name: p.roles?.name ?? '' })))
 
       const { data: reqData } = await supabase
         .from('requests')
@@ -214,7 +234,10 @@ export default function RequestsScreen() {
 
   const myRequests = requests.filter(r => r.requested_by === profile?.id)
   const inbox = requests.filter(r => r.recipient_id === profile?.id)
-  const activeList = tab === 'mine' ? myRequests : inbox
+  const toCompleteList = requests.filter((r: any) =>
+    r.assigned_to === profile?.id && r.status === 'approved' && !r.completed_at
+  )
+  const activeList = tab === 'mine' ? myRequests : tab === 'inbox' ? inbox : toCompleteList
   const filtered = filter === 'all' ? activeList : activeList.filter(r => r.status === filter)
   const pendingCount = activeList.filter(r => r.status === 'pending').length
   const approvedCount = activeList.filter(r => r.status === 'approved').length
@@ -235,7 +258,7 @@ export default function RequestsScreen() {
       <Text style={styles.cardDesc} numberOfLines={2}>{item.description}</Text>
       <View style={styles.cardMeta}>
         <Text style={styles.metaText}>
-          {tab === 'mine' ? `To: ${item.recipient_name}` : `From: ${item.sender_name}`}
+          {tab === 'mine' ? `To: ${item.recipient_name}` : tab === 'inbox' ? `From: ${item.sender_name}` : `From: ${item.sender_name}`}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <View style={[styles.priorityDot, { backgroundColor: PRIORITY_COLOR[item.priority] ?? '#6b8f71' }]} />
@@ -257,12 +280,17 @@ export default function RequestsScreen() {
       <View style={styles.tabRow}>
         <TouchableOpacity style={[styles.tabBtn, tab === 'mine' && styles.tabBtnActive]} onPress={() => setTab('mine')}>
           <Text style={[styles.tabText, tab === 'mine' && styles.tabTextActive]}>
-            My Requests {myRequests.length > 0 ? `(${myRequests.length})` : ''}
+            Mine {myRequests.length > 0 ? `(${myRequests.length})` : ''}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.tabBtn, tab === 'inbox' && styles.tabBtnActive]} onPress={() => setTab('inbox')}>
           <Text style={[styles.tabText, tab === 'inbox' && styles.tabTextActive]}>
             Inbox {inbox.filter(r => r.status === 'pending').length > 0 ? `(${inbox.filter(r => r.status === 'pending').length})` : ''}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tabBtn, tab === 'complete' && styles.tabBtnActive]} onPress={() => setTab('complete')}>
+          <Text style={[styles.tabText, tab === 'complete' && styles.tabTextActive]}>
+            To Do {toCompleteList.length > 0 ? `(${toCompleteList.length})` : ''}
           </Text>
         </TouchableOpacity>
       </View>
@@ -292,12 +320,15 @@ export default function RequestsScreen() {
 
       {loading ? (
         <View style={styles.center}><ActivityIndicator color="#c9a84c" size="large" /></View>
-      ) : filtered.length === 0 ? (
+       ) : filtered.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyIcon}>{tab === 'mine' ? '📋' : '📥'}</Text>
-          <Text style={styles.emptyText}>{tab === 'mine' ? 'No requests sent' : 'Your inbox is empty'}</Text>
+          <Text style={styles.emptyIcon}>{tab === 'mine' ? '📋' : tab === 'inbox' ? '📥' : '✅'}</Text>
+          <Text style={styles.emptyText}>
+            {tab === 'mine' ? 'No requests sent' : tab === 'inbox' ? 'Your inbox is empty' : 'Nothing to complete'}
+          </Text>
         </View>
       ) : (
+
         <FlatList
           data={filtered}
           keyExtractor={i => i.id}
@@ -466,7 +497,7 @@ export default function RequestsScreen() {
                     />
                   </>
                 )}
-                
+
                 <Text style={styles.label}>Priority</Text>
                 <View style={styles.typeRow}>
                   {['Low', 'Medium', 'High', 'Critical'].map(p => (
