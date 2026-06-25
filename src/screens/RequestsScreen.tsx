@@ -6,6 +6,8 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
+import * as ImagePicker from 'expo-image-picker'
+import * as DocumentPicker from 'expo-document-picker'
 import { supabase } from '../lib/supabase'
 
 type Request = {
@@ -14,10 +16,12 @@ type Request = {
   description: string
   request_type: string
   priority: string
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'approved' | 'rejected' | 'completed'
   created_at: string
   requested_by: string
   recipient_id: string
+  assigned_to?: string
+  completed_at?: string
   sender_name?: string
   recipient_name?: string
 }
@@ -97,6 +101,9 @@ export default function RequestsScreen() {
   const [showAssigneePicker, setShowAssigneePicker] = useState(false)
   const [completionNotes, setCompletionNotes] = useState('')
   const [completing, setCompleting] = useState(false)
+  const [completionFile, setCompletionFile] = useState<{ uri: string; name: string; mimeType: string } | null>(null)
+  const [uploadingCompletionFile, setUploadingCompletionFile] = useState(false)
+  const [showAttachOptions, setShowAttachOptions] = useState(false)
 
 
   const loadData = async () => {
@@ -213,23 +220,197 @@ export default function RequestsScreen() {
   }
 
 
-  const updateStatus = async (id: string, status: 'approved' | 'rejected') => {
-    const label = status === 'approved' ? 'Approve' : 'Reject'
-    Alert.alert(label, `${label} this request?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: label,
-        style: status === 'rejected' ? 'destructive' : 'default',
-        onPress: async () => {
-        await supabase.from('requests')
-         .update({ status, response_message: responseMsg.trim() })
-          .eq('id', id)
-          setDetailRequest(null)
-          setResponseMsg('')
-           await loadData()
-          }
+ const handleReject = async () => {
+    if (!detailRequest) return
+    try {
+      const nowIso = new Date().toISOString()
+      const { data: { user } } = await supabase.auth.getUser()
+      const { error } = await supabase.from('requests').update({
+        status: 'rejected',
+        response_message: responseMsg.trim(),
+        rejected_at: nowIso,
+        responded_at: nowIso,
+      }).eq('id', detailRequest.id)
+
+      if (error) throw error
+
+      await supabase.from('notifications').insert({
+        recipient_id: detailRequest.requested_by,
+        title: 'Request Rejected',
+        message: `Your request "${detailRequest.title}" has been rejected.`,
+        is_read: false, requested_by: user!.id, request_id: detailRequest.id,
+      })
+
+      setDetailRequest(null)
+      setResponseMsg('')
+      await loadData()
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Failed to reject request')
+    }
+  }
+
+  const handleApprove = async () => {
+    if (!detailRequest) return
+    if (completionMode === 'assign' && !assigneeId) {
+      Alert.alert('Required', 'Please select someone to complete this request')
+      return
+    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const finalAssignee = completionMode === 'self' ? user!.id : assigneeId
+      const nowIso = new Date().toISOString()
+
+      const { error } = await supabase.from('requests').update({
+        status: 'approved',
+        response_message: responseMsg.trim(),
+        approved_by: user!.id,
+        approved_at: nowIso,
+        responded_at: nowIso,
+        assigned_to: finalAssignee,
+      }).eq('id', detailRequest.id)
+
+      if (error) throw error
+
+      const notifications = [{
+        recipient_id: detailRequest.requested_by,
+        title: 'Request Approved',
+        message: `Your request "${detailRequest.title}" has been approved.`,
+        is_read: false, requested_by: user!.id, request_id: detailRequest.id,
+      }]
+
+      if (finalAssignee !== user!.id) {
+        notifications.push({
+          recipient_id: finalAssignee,
+          title: 'Request Assigned to You',
+          message: `You've been assigned to complete: "${detailRequest.title}"`,
+          is_read: false, requested_by: user!.id, request_id: detailRequest.id,
+        })
       }
-    ])
+
+      await supabase.from('notifications').insert(notifications)
+
+      setDetailRequest(null)
+      setResponseMsg('')
+      setCompletionMode('self')
+      setAssigneeId('')
+      await loadData()
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Failed to approve request')
+    }
+  }
+
+  const pickCompletionPhoto = async () => {
+    setShowAttachOptions(false)
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Please allow access to your photo library')
+      return
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: false,
+      quality: 0.7,
+    })
+
+    if (result.canceled || !result.assets?.[0]) return
+    const asset = result.assets[0]
+    const ext = asset.uri.split('.').pop() ?? 'jpg'
+    setCompletionFile({
+      uri: asset.uri,
+      name: `photo-${Date.now()}.${ext}`,
+      mimeType: asset.mimeType ?? `image/${ext}`,
+    })
+  }
+
+  const pickCompletionDocument = async () => {
+    setShowAttachOptions(false)
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/*'],
+      copyToCacheDirectory: true,
+    })
+
+    if (result.canceled || !result.assets?.[0]) return
+    const asset = result.assets[0]
+    setCompletionFile({
+      uri: asset.uri,
+      name: asset.name,
+      mimeType: asset.mimeType ?? 'application/octet-stream',
+    })
+  }
+
+  const handleComplete = async () => {
+    if (!detailRequest) return
+    const attachmentRequired = ATTACHMENT_REQUIRED_TYPES.has(detailRequest.request_type)
+
+    if (attachmentRequired && !completionFile) {
+      Alert.alert('Attachment Required', `${detailRequest.request_type} requests require a document before marking as completed.`)
+      return
+    }
+
+    setCompleting(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      let attachmentUrl: string | null = null
+
+      if (completionFile) {
+        setUploadingCompletionFile(true)
+        const ext = completionFile.name.split('.').pop() ?? 'dat'
+        const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+        const formData = new FormData()
+        formData.append('file', {
+          uri: completionFile.uri,
+          name: fileName,
+          type: completionFile.mimeType,
+        } as any)
+
+        const { data, error: uploadError } = await supabase.storage
+          .from('attachments')
+          .upload(`completions/${fileName}`, formData, { contentType: 'multipart/form-data' })
+
+        setUploadingCompletionFile(false)
+
+        if (uploadError) throw uploadError
+        if (data) {
+          const { data: urlData } = supabase.storage.from('attachments').getPublicUrl(data.path)
+          attachmentUrl = urlData.publicUrl
+        }
+      }
+
+      const nowIso = new Date().toISOString()
+      const { error } = await supabase.from('requests').update({
+        status: 'completed',
+        completed_by: user!.id,
+        completed_at: nowIso,
+        completion_notes: completionNotes.trim() || null,
+        response_attachment_url: attachmentUrl,
+      }).eq('id', detailRequest.id)
+
+      if (error) throw error
+
+      const recipients = [...new Set([detailRequest.requested_by, detailRequest.recipient_id])]
+        .filter(id => id && id !== user!.id)
+
+      if (recipients.length > 0) {
+        await supabase.from('notifications').insert(
+          recipients.map(rid => ({
+            recipient_id: rid,
+            title: 'Request Completed',
+            message: `"${detailRequest.title}" has been marked as completed.`,
+            is_read: false, requested_by: user!.id, request_id: detailRequest.id,
+          }))
+        )
+      }
+
+      setDetailRequest(null)
+      setCompletionNotes('')
+      setCompletionFile(null)
+      await loadData()
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Failed to mark as completed')
+    } finally {
+      setCompleting(false)
+    }
   }
 
   const myRequests = requests.filter(r => r.requested_by === profile?.id)
@@ -399,22 +580,126 @@ export default function RequestsScreen() {
                       multiline
                       textAlignVertical="top"
                     />
-                    <View style={styles.actionRow}>
+
+                    <Text style={styles.label}>Who Will Complete This?</Text>
+                    <View style={[styles.typeRow, { marginBottom: 12 }]}>
+                      <TouchableOpacity
+                        style={[styles.typeBtn, completionMode === 'self' && styles.typeBtnActive, { flex: 1 }]}
+                        onPress={() => setCompletionMode('self')}
+                      >
+                        <Text style={[styles.typeBtnText, completionMode === 'self' && styles.typeBtnTextActive]}>I'll Do It</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.typeBtn, completionMode === 'assign' && styles.typeBtnActive, { flex: 1 }]}
+                        onPress={() => setCompletionMode('assign')}
+                      >
+                        <Text style={[styles.typeBtnText, completionMode === 'assign' && styles.typeBtnTextActive]}>Assign Someone</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {completionMode === 'assign' && (
+                      <>
+                        <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowAssigneePicker(!showAssigneePicker)}>
+                          <Text style={assigneeId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                            {assigneeId
+                              ? orgProfiles.find(p => p.id === assigneeId)?.full_name
+                              : 'Select person...'}
+                          </Text>
+                          <Text style={styles.chevron}>{showAssigneePicker ? '▲' : '▼'}</Text>
+                        </TouchableOpacity>
+                        {showAssigneePicker && (
+                          <View style={styles.recipientDropdown}>
+                            {getAssigneePool(detailRequest.request_type, orgProfiles).map(p => (
+                              <TouchableOpacity
+                                key={p.id}
+                                style={[styles.recipientOption, assigneeId === p.id && styles.recipientOptionActive]}
+                                onPress={() => { setAssigneeId(p.id); setShowAssigneePicker(false) }}
+                              >
+                                <Text style={[styles.recipientOptionText, assigneeId === p.id && { color: '#0d2818' }]}>
+                                  {p.full_name}{p.role_name ? ` (${p.role_name})` : ''}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+                      </>
+                    )}
+
+                    <View style={[styles.actionRow, { marginTop: 12 }]}>
                       <TouchableOpacity
                         style={[styles.actionBtn, { borderColor: '#4caf82', flex: 1, justifyContent: 'center', backgroundColor: '#4caf8222' }]}
-                        onPress={() => updateStatus(detailRequest.id, 'approved')}
+                        onPress={handleApprove}
                       >
                         <Text style={[styles.actionBtnText, { color: '#4caf82' }]}>✓ Approve</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.actionBtn, { borderColor: '#e05c5c', flex: 1, justifyContent: 'center', backgroundColor: '#e05c5c22' }]}
-                        onPress={() => updateStatus(detailRequest.id, 'rejected')}
+                        onPress={handleReject}
                       >
                         <Text style={[styles.actionBtnText, { color: '#e05c5c' }]}>✕ Reject</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
                 )}
+
+                {detailRequest?.assigned_to === profile?.id &&
+                  detailRequest?.status === 'approved' &&
+                  !detailRequest?.completed_at && (
+                  <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: '#1e4d2b', paddingTop: 16 }}>
+                    <Text style={styles.label}>Completion Notes</Text>
+                    <TextInput
+                      style={[styles.input, { height: 80, marginBottom: 12 }]}
+                      placeholder="Describe what was done..."
+                      placeholderTextColor="#4a7a54"
+                      value={completionNotes}
+                      onChangeText={setCompletionNotes}
+                      multiline
+                      textAlignVertical="top"
+                    />
+
+                    <Text style={styles.label}>
+                      Attach File {ATTACHMENT_REQUIRED_TYPES.has(detailRequest.request_type) ? '(required)' : '(optional)'}
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.recipientPicker, { marginBottom: 8 }]}
+                      onPress={() => setShowAttachOptions(!showAttachOptions)}
+                      disabled={uploadingCompletionFile}
+                    >
+                      <Text style={completionFile ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {completionFile ? completionFile.name : 'Tap to attach a file...'}
+                      </Text>
+                      <Text style={styles.chevron}>{showAttachOptions ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+
+                    {showAttachOptions && (
+                      <View style={[styles.recipientDropdown, { marginBottom: 12 }]}>
+                        <TouchableOpacity style={styles.recipientOption} onPress={pickCompletionPhoto}>
+                          <Text style={styles.recipientOptionText}>📷 Choose Photo</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.recipientOption, { borderBottomWidth: 0 }]} onPress={pickCompletionDocument}>
+                          <Text style={styles.recipientOptionText}>📄 Choose Document (PDF, Word)</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {completionFile && (
+                      <TouchableOpacity onPress={() => setCompletionFile(null)} style={{ marginBottom: 12 }}>
+                        <Text style={{ color: '#e05c5c', fontSize: 12, fontWeight: '600' }}>✕ Remove file</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                      style={[styles.submitBtn, (completing || uploadingCompletionFile) && { opacity: 0.6 }]}
+                      onPress={handleComplete}
+                      disabled={completing || uploadingCompletionFile}
+                    >
+                      {completing || uploadingCompletionFile
+                        ? <ActivityIndicator color="#0d2818" />
+                        : <Text style={styles.submitBtnText}>✓ Mark as Completed</Text>}
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 <TouchableOpacity
                   style={styles.closeBar}
                   onPress={() => { setDetailRequest(null); setResponseMsg('') }}
