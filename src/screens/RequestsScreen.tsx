@@ -42,6 +42,21 @@ const PRIORITY_COLOR: Record<string, string> = {
   Critical: '#e05c5c',
 }
 
+function buildRequestExtras(requestType: string, s: { leaveFrom: string; leaveTo: string; amount: string }) {
+  let start_date: string | null = null
+  let end_date: string | null = null
+  let amount: number | null = null
+
+  if (requestType === 'Leave') {
+    start_date = s.leaveFrom || null
+    end_date = s.leaveTo || null
+  } else if (requestType === 'Petty Cash') {
+    amount = s.amount ? Number(s.amount) : null
+  }
+
+  return { start_date, end_date, amount }
+}
+
 export default function RequestsScreen() {
   const [tab, setTab] = useState<'mine' | 'inbox'>('mine')
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
@@ -59,6 +74,9 @@ export default function RequestsScreen() {
   const [submitting, setSubmitting] = useState(false)
   const [showRecipientPicker, setShowRecipientPicker] = useState(false)
   const [responseMsg, setResponseMsg] = useState('')
+  const [leaveFrom, setLeaveFrom] = useState('')
+  const [leaveTo, setLeaveTo] = useState('')
+  const [amount, setAmount] = useState('')
 
 
   const loadData = async () => {
@@ -119,34 +137,51 @@ export default function RequestsScreen() {
   const resetForm = () => {
     setTitle(''); setDescription(''); setRequestType('General')
     setPriority('Medium'); setRecipientId(''); setShowRecipientPicker(false)
+    setLeaveFrom(''); setLeaveTo(''); setAmount('')
   }
 
   const submitRequest = async () => {
     if (!title.trim()) return Alert.alert('Required', 'Please enter a title')
     if (!description.trim()) return Alert.alert('Required', 'Please enter a description')
     if (!recipientId) return Alert.alert('Required', 'Please select a recipient')
+    if (requestType === 'Leave' && (!leaveFrom || !leaveTo)) {
+      return Alert.alert('Required', 'Please enter both start and end dates')
+    }
     try {
       setSubmitting(true)
       const { data: { user } } = await supabase.auth.getUser()
-      const { error } = await supabase.from('requests').insert({
-        title: title.trim(),
-        description: description.trim(),
-        request_type: requestType,
-        priority,
-        status: 'pending',
-        requested_by: user!.id,
-        recipient_id: recipientId,
-        organization_id: profile!.organization_id,
-      })
+
+      const extras = buildRequestExtras(requestType, { leaveFrom, leaveTo, amount })
+
+      const { data: newRequest, error } = await supabase
+        .from('requests')
+        .insert({
+          title: title.trim(),
+          description: description.trim(),
+          request_type: requestType,
+          amount: extras.amount,
+          start_date: extras.start_date,
+          end_date: extras.end_date,
+          priority,
+          status: 'pending',
+          requested_by: user!.id,
+          recipient_id: recipientId,
+          organization_id: profile!.organization_id,
+        })
+        .select()
+        .single()
+
       if (error) throw error
-      // Create notification for recipient
-await supabase.from('notifications').insert({
-  title: 'New Request',
-  message: `${profile!.full_name ?? 'Someone'} sent you a request: "${title.trim()}"`,
-  recipient_id: recipientId,
-  requested_by: user!.id,
-  is_read: false,
-})
+
+      await supabase.from('notifications').insert({
+        title: 'New Request',
+        message: `${profile!.full_name ?? 'Someone'} sent you a request: "${title.trim()}"`,
+        recipient_id: recipientId,
+        requested_by: user!.id,
+        request_id: newRequest?.id,
+        is_read: false,
+      })
+
       resetForm()
       setModalVisible(false)
       await loadData()
@@ -156,6 +191,7 @@ await supabase.from('notifications').insert({
       setSubmitting(false)
     }
   }
+
 
   const updateStatus = async (id: string, status: 'approved' | 'rejected') => {
     const label = status === 'approved' ? 'Approve' : 'Reject'
@@ -386,14 +422,51 @@ await supabase.from('notifications').insert({
                     ))}
                   </View>
                 )}
+
                 <Text style={styles.label}>Request Type</Text>
                 <View style={styles.typeRow}>
-                  {['General', 'Material', 'Equipment', 'Financial', 'HR'].map(t => (
+                  {['General', 'Leave', 'Petty Cash', 'Material'].map(t => (
                     <TouchableOpacity key={t} style={[styles.typeBtn, requestType === t && styles.typeBtnActive]} onPress={() => setRequestType(t)}>
                       <Text style={[styles.typeBtnText, requestType === t && styles.typeBtnTextActive]}>{t}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
+
+                {requestType === 'Leave' && (
+                  <>
+                    <Text style={styles.label}>Start Date</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor="#4a7a54"
+                      value={leaveFrom}
+                      onChangeText={setLeaveFrom}
+                    />
+                    <Text style={styles.label}>End Date</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor="#4a7a54"
+                      value={leaveTo}
+                      onChangeText={setLeaveTo}
+                    />
+                  </>
+                )}
+
+                {requestType === 'Petty Cash' && (
+                  <>
+                    <Text style={styles.label}>Amount (GHS)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="0.00"
+                      placeholderTextColor="#4a7a54"
+                      value={amount}
+                      onChangeText={setAmount}
+                      keyboardType="numeric"
+                    />
+                  </>
+                )}
+                
                 <Text style={styles.label}>Priority</Text>
                 <View style={styles.typeRow}>
                   {['Low', 'Medium', 'High', 'Critical'].map(p => (
