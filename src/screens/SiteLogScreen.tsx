@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, ActivityIndicator, SafeAreaView, Modal,
+  TextInput, ActivityIndicator, Modal,
   KeyboardAvoidingView, Platform, Alert, FlatList,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
 import * as ImagePicker from 'expo-image-picker'
 import { supabase } from '../lib/supabase'
@@ -376,184 +377,194 @@ export default function SiteLogScreen() {
         </View>
       </Modal>
 
-      {/* New Log Modal */}
-      <Modal visible={showLogModal} animationType="slide" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+      {/* New Log Overlay */}
+      {showLogModal && (
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            style={styles.modalKav}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
             <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>New Site Log</Text>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={styles.modalTitle}>New Site Log</Text>
 
-              <Text style={styles.label}>Date</Text>
-              <TextInput
-                style={styles.input}
-                value={logDate}
-                onChangeText={setLogDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#4a7a54"
-              />
+                <Text style={styles.label}>Date</Text>
+                <TextInput
+                  style={styles.input}
+                  value={logDate}
+                  onChangeText={setLogDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#4a7a54"
+                />
 
-              <Text style={styles.label}>Weather</Text>
-              <View style={styles.weatherRow}>
-                {WEATHER_OPTIONS.map(w => (
-                  <TouchableOpacity
-                    key={w}
-                    style={[styles.weatherBtn, weather === w && styles.weatherBtnActive]}
-                    onPress={() => setWeather(w)}
-                  >
-                    <Text style={[styles.weatherBtnText, weather === w && styles.weatherBtnTextActive]}>{w}</Text>
+                <Text style={styles.label}>Weather</Text>
+                <View style={styles.weatherRow}>
+                  {WEATHER_OPTIONS.map(w => (
+                    <TouchableOpacity
+                      key={w}
+                      style={[styles.weatherBtn, weather === w && styles.weatherBtnActive]}
+                      onPress={() => setWeather(w)}
+                    >
+                      <Text style={[styles.weatherBtnText, weather === w && styles.weatherBtnTextActive]}>{w}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.label}>Activities *</Text>
+                <TextInput
+                  style={[styles.input, styles.textarea]}
+                  placeholder="Describe work done today..."
+                  placeholderTextColor="#4a7a54"
+                  value={activities}
+                  onChangeText={setActivities}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+
+                <Text style={styles.label}>Workers Present</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Number of workers"
+                  placeholderTextColor="#4a7a54"
+                  value={workers}
+                  onChangeText={setWorkers}
+                  keyboardType="number-pad"
+                />
+
+                <Text style={styles.label}>Notes</Text>
+                <TextInput
+                  style={[styles.input, styles.textarea]}
+                  placeholder="Additional notes..."
+                  placeholderTextColor="#4a7a54"
+                  value={notes}
+                  onChangeText={setNotes}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+
+                <Text style={styles.label}>Site Photos</Text>
+                <TouchableOpacity
+                  style={styles.photoUploadBtn}
+                  onPress={pickAndUploadPhoto}
+                  disabled={uploadingPhoto}
+                >
+                  {uploadingPhoto
+                    ? <ActivityIndicator color="#c9a84c" />
+                    : <Text style={styles.photoUploadText}>📷 Add Photos</Text>}
+                </TouchableOpacity>
+                {photos.length > 0 && (
+                  <View style={styles.photoPreviewRow}>
+                    {photos.map((url, i) => (
+                      <View key={i} style={styles.photoPreview}>
+                        <Text style={styles.photoPreviewText}>📸 Photo {i + 1}</Text>
+                        <TouchableOpacity onPress={() => setPhotos(prev => prev.filter((_, j) => j !== i))}>
+                          <Text style={styles.photoRemove}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <View style={styles.modalBtns}>
+                  <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowLogModal(false); resetLogForm() }}>
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.label}>Activities *</Text>
-              <TextInput
-                style={[styles.input, styles.textarea]}
-                placeholder="Describe work done today..."
-                placeholderTextColor="#4a7a54"
-                value={activities}
-                onChangeText={setActivities}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-
-              <Text style={styles.label}>Workers Present</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Number of workers"
-                placeholderTextColor="#4a7a54"
-                value={workers}
-                onChangeText={setWorkers}
-                keyboardType="number-pad"
-              />
-
-              <Text style={styles.label}>Notes</Text>
-              <TextInput
-                style={[styles.input, styles.textarea]}
-                placeholder="Additional notes..."
-                placeholderTextColor="#4a7a54"
-                value={notes}
-                onChangeText={setNotes}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-
-              <Text style={styles.label}>Site Photos</Text>
-<TouchableOpacity
-  style={styles.photoUploadBtn}
-  onPress={pickAndUploadPhoto}
-  disabled={uploadingPhoto}
->
-  {uploadingPhoto
-    ? <ActivityIndicator color="#c9a84c" />
-    : <Text style={styles.photoUploadText}>📷 Add Photos</Text>}
-</TouchableOpacity>
-{photos.length > 0 && (
-  <View style={styles.photoPreviewRow}>
-    {photos.map((url, i) => (
-      <View key={i} style={styles.photoPreview}>
-        <Text style={styles.photoPreviewText}>📸 Photo {i + 1}</Text>
-        <TouchableOpacity onPress={() => setPhotos(prev => prev.filter((_, j) => j !== i))}>
-          <Text style={styles.photoRemove}>✕</Text>
-        </TouchableOpacity>
-      </View>
-    ))}
-  </View>
-)}
-
-              <View style={styles.modalBtns}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowLogModal(false); resetLogForm() }}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.submitBtn, submittingLog && { opacity: 0.6 }]}
-                  onPress={submitLog}
-                  disabled={submittingLog}
-                >
-                  {submittingLog ? <ActivityIndicator color="#0d2818" /> : <Text style={styles.submitBtnText}>Submit</Text>}
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity
+                    style={[styles.submitBtn, submittingLog && { opacity: 0.6 }]}
+                    onPress={submitLog}
+                    disabled={submittingLog}
+                  >
+                    {submittingLog ? <ActivityIndicator color="#0d2818" /> : <Text style={styles.submitBtnText}>Submit</Text>}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Modal>
+          </KeyboardAvoidingView>
+        </View>
+      )}
 
-      {/* New Material Modal */}
-      <Modal visible={showMaterialModal} animationType="slide" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+      {/* New Material Overlay */}
+      {showMaterialModal && (
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            style={styles.modalKav}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
             <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Log Material</Text>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={styles.modalTitle}>Log Material</Text>
 
-              <Text style={styles.label}>Date</Text>
-              <TextInput
-                style={styles.input}
-                value={matDate}
-                onChangeText={setMatDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#4a7a54"
-              />
+                <Text style={styles.label}>Date</Text>
+                <TextInput
+                  style={styles.input}
+                  value={matDate}
+                  onChangeText={setMatDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#4a7a54"
+                />
 
-              <Text style={styles.label}>Material Name *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Cement, Steel rods..."
-                placeholderTextColor="#4a7a54"
-                value={matName}
-                onChangeText={setMatName}
-              />
+                <Text style={styles.label}>Material Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Cement, Steel rods..."
+                  placeholderTextColor="#4a7a54"
+                  value={matName}
+                  onChangeText={setMatName}
+                />
 
-              <View style={styles.rowInputs}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Quantity</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="0"
-                    placeholderTextColor="#4a7a54"
-                    value={matQty}
-                    onChangeText={setMatQty}
-                    keyboardType="numeric"
-                  />
+                <View style={styles.rowInputs}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>Quantity</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="0"
+                      placeholderTextColor="#4a7a54"
+                      value={matQty}
+                      onChangeText={setMatQty}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>Unit</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="bags, tonnes..."
+                      placeholderTextColor="#4a7a54"
+                      value={matUnit}
+                      onChangeText={setMatUnit}
+                    />
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Unit</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="bags, tonnes..."
-                    placeholderTextColor="#4a7a54"
-                    value={matUnit}
-                    onChangeText={setMatUnit}
-                  />
+
+                <Text style={styles.label}>Cost (GHS)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="0.00"
+                  placeholderTextColor="#4a7a54"
+                  value={matCost}
+                  onChangeText={setMatCost}
+                  keyboardType="numeric"
+                />
+
+                <View style={styles.modalBtns}>
+                  <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowMaterialModal(false); resetMatForm() }}>
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.submitBtn, submittingMat && { opacity: 0.6 }]}
+                    onPress={submitMaterial}
+                    disabled={submittingMat}
+                  >
+                    {submittingMat ? <ActivityIndicator color="#0d2818" /> : <Text style={styles.submitBtnText}>Submit</Text>}
+                  </TouchableOpacity>
                 </View>
-              </View>
-
-              <Text style={styles.label}>Cost (GHS)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0.00"
-                placeholderTextColor="#4a7a54"
-                value={matCost}
-                onChangeText={setMatCost}
-                keyboardType="numeric"
-              />
-
-              <View style={styles.modalBtns}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => { setShowMaterialModal(false); resetMatForm() }}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.submitBtn, submittingMat && { opacity: 0.6 }]}
-                  onPress={submitMaterial}
-                  disabled={submittingMat}
-                >
-                  {submittingMat ? <ActivityIndicator color="#0d2818" /> : <Text style={styles.submitBtnText}>Submit</Text>}
-                </TouchableOpacity>
-              </View>
+              </ScrollView>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Modal>
+          </KeyboardAvoidingView>
+        </View>
+      )}
     </SafeAreaView>
   )
 }
@@ -589,7 +600,13 @@ const styles = StyleSheet.create({
   matRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 8 },
   matChip: { borderWidth: 1, borderColor: '#c9a84c', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
   matChipText: { fontSize: 12, color: '#c9a84c', fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    zIndex: 50,
+  },
+  modalKav: { flex: 1, justifyContent: 'flex-end' },
   modalCard: { backgroundColor: '#102e1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 48, maxHeight: '92%' },
   modalTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', marginBottom: 20 },
   label: { fontSize: 13, fontWeight: '600', color: '#c9a84c', marginBottom: 6 },

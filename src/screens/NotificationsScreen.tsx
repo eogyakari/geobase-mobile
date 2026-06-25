@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, SafeAreaView, Modal, ScrollView,
-  TextInput, Alert,
+  ActivityIndicator, Modal, ScrollView,
+  TextInput, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../lib/supabase'
 
@@ -95,22 +96,23 @@ export default function NotificationsScreen() {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
   }
 
-  const handleAction = async () => {
-    if (!selectedRequest || !actionType) return
+  const handleAction = async (type: 'approved' | 'rejected') => {
+    if (!selectedRequest) return
     if (!responseMessage.trim()) {
       Alert.alert('Required', 'Please enter a response message')
       return
     }
     try {
       setActing(true)
+      setActionType(type)
       await supabase.from('requests')
-        .update({ status: actionType, response_message: responseMessage.trim() })
+        .update({ status: type, response_message: responseMessage.trim() })
         .eq('id', selectedRequest.id)
 
       // Notify the sender
       await supabase.from('notifications').insert({
-        title: `Request ${actionType.charAt(0).toUpperCase() + actionType.slice(1)}`,
-        message: `Your request "${selectedRequest.title}" has been ${actionType}. ${responseMessage.trim()}`,
+        title: `Request ${type.charAt(0).toUpperCase() + type.slice(1)}`,
+        message: `Your request "${selectedRequest.title}" has been ${type}. ${responseMessage.trim()}`,
         recipient_id: selectedRequest.requested_by,
         requested_by: userId,
         is_read: false,
@@ -120,7 +122,7 @@ export default function NotificationsScreen() {
       setResponseMessage('')
       setActionType(null)
       await loadData()
-      Alert.alert('Done', `Request has been ${actionType}.`)
+      Alert.alert('Done', `Request has been ${type}.`)
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Failed to update request')
     } finally {
@@ -185,89 +187,94 @@ export default function NotificationsScreen() {
         />
       )}
 
-      {/* Request Detail Modal */}
-      <Modal visible={!!selectedRequest} animationType="slide" transparent>
+      {/* Request Detail Overlay */}
+      {!!selectedRequest && (
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{selectedRequest?.title}</Text>
-                <TouchableOpacity onPress={() => { setSelectedRequest(null); setResponseMessage(''); setActionType(null) }}>
-                  <Text style={styles.closeBtn}>✕</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={[styles.statusBadge, {
-                backgroundColor: selectedRequest?.status === 'pending' ? '#c9a84c22' :
-                  selectedRequest?.status === 'approved' ? '#4caf8222' : '#e05c5c22',
-                borderColor: selectedRequest?.status === 'pending' ? '#c9a84c' :
-                  selectedRequest?.status === 'approved' ? '#4caf82' : '#e05c5c',
-              }]}>
-                <Text style={[styles.statusText, {
-                  color: selectedRequest?.status === 'pending' ? '#c9a84c' :
-                    selectedRequest?.status === 'approved' ? '#4caf82' : '#e05c5c'
-                }]}>{selectedRequest?.status?.toUpperCase()}</Text>
-              </View>
-
-              <Text style={styles.label}>From</Text>
-              <Text style={styles.value}>{selectedRequest?.sender_name}</Text>
-
-              <Text style={styles.label}>Type</Text>
-              <Text style={styles.value}>{selectedRequest?.request_type}</Text>
-
-              <Text style={styles.label}>Priority</Text>
-              <Text style={styles.value}>{selectedRequest?.priority}</Text>
-
-              <Text style={styles.label}>Description</Text>
-              <Text style={styles.value}>{selectedRequest?.description}</Text>
-
-              <Text style={styles.label}>Date</Text>
-              <Text style={styles.value}>
-                {selectedRequest ? new Date(selectedRequest.created_at).toLocaleDateString('en-GB', {
-                  day: 'numeric', month: 'long', year: 'numeric'
-                }) : ''}
-              </Text>
-
-              {/* Approve/Reject — only for pending requests */}
-              {selectedRequest?.status === 'pending' && (
-                <View style={styles.actionSection}>
-                  <Text style={styles.label}>Response Message</Text>
-                  <TextInput
-                    style={styles.responseInput}
-                    placeholder="Add a response message..."
-                    placeholderTextColor="#4a7a54"
-                    value={responseMessage}
-                    onChangeText={setResponseMessage}
-                    multiline
-                    numberOfLines={3}
-                    textAlignVertical="top"
-                  />
-                  <View style={styles.actionBtns}>
-                    <TouchableOpacity
-                      style={[styles.approveBtn, acting && { opacity: 0.6 }]}
-                      onPress={() => { setActionType('approved'); handleAction() }}
-                      disabled={acting}
-                    >
-                      {acting && actionType === 'approved'
-                        ? <ActivityIndicator color="#0d2818" />
-                        : <Text style={styles.approveBtnText}>✓ Approve</Text>}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.rejectBtn, acting && { opacity: 0.6 }]}
-                      onPress={() => { setActionType('rejected'); handleAction() }}
-                      disabled={acting}
-                    >
-                      {acting && actionType === 'rejected'
-                        ? <ActivityIndicator color="#ffffff" />
-                        : <Text style={styles.rejectBtnText}>✕ Reject</Text>}
-                    </TouchableOpacity>
-                  </View>
+          <KeyboardAvoidingView
+            style={styles.modalKav}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View style={styles.modalCard}>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{selectedRequest?.title}</Text>
+                  <TouchableOpacity onPress={() => { setSelectedRequest(null); setResponseMessage(''); setActionType(null) }}>
+                    <Text style={styles.closeBtn}>✕</Text>
+                  </TouchableOpacity>
                 </View>
-              )}
-            </ScrollView>
-          </View>
+
+                <View style={[styles.statusBadge, {
+                  backgroundColor: selectedRequest?.status === 'pending' ? '#c9a84c22' :
+                    selectedRequest?.status === 'approved' ? '#4caf8222' : '#e05c5c22',
+                  borderColor: selectedRequest?.status === 'pending' ? '#c9a84c' :
+                    selectedRequest?.status === 'approved' ? '#4caf82' : '#e05c5c',
+                }]}>
+                  <Text style={[styles.statusText, {
+                    color: selectedRequest?.status === 'pending' ? '#c9a84c' :
+                      selectedRequest?.status === 'approved' ? '#4caf82' : '#e05c5c'
+                  }]}>{selectedRequest?.status?.toUpperCase()}</Text>
+                </View>
+
+                <Text style={styles.label}>From</Text>
+                <Text style={styles.value}>{selectedRequest?.sender_name}</Text>
+
+                <Text style={styles.label}>Type</Text>
+                <Text style={styles.value}>{selectedRequest?.request_type}</Text>
+
+                <Text style={styles.label}>Priority</Text>
+                <Text style={styles.value}>{selectedRequest?.priority}</Text>
+
+                <Text style={styles.label}>Description</Text>
+                <Text style={styles.value}>{selectedRequest?.description}</Text>
+
+                <Text style={styles.label}>Date</Text>
+                <Text style={styles.value}>
+                  {selectedRequest ? new Date(selectedRequest.created_at).toLocaleDateString('en-GB', {
+                    day: 'numeric', month: 'long', year: 'numeric'
+                  }) : ''}
+                </Text>
+
+                {/* Approve/Reject — only for pending requests */}
+                {selectedRequest?.status === 'pending' && (
+                  <View style={styles.actionSection}>
+                    <Text style={styles.label}>Response Message</Text>
+                    <TextInput
+                      style={styles.responseInput}
+                      placeholder="Add a response message..."
+                      placeholderTextColor="#4a7a54"
+                      value={responseMessage}
+                      onChangeText={setResponseMessage}
+                      multiline
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                    />
+                    <View style={styles.actionBtns}>
+                      <TouchableOpacity
+                        style={[styles.approveBtn, acting && { opacity: 0.6 }]}
+                        onPress={() => handleAction('approved')}
+                        disabled={acting}
+                      >
+                        {acting && actionType === 'approved'
+                          ? <ActivityIndicator color="#0d2818" />
+                          : <Text style={styles.approveBtnText}>✓ Approve</Text>}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.rejectBtn, acting && { opacity: 0.6 }]}
+                        onPress={() => handleAction('rejected')}
+                        disabled={acting}
+                      >
+                        {acting && actionType === 'rejected'
+                          ? <ActivityIndicator color="#ffffff" />
+                          : <Text style={styles.rejectBtnText}>✕ Reject</Text>}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
         </View>
-      </Modal>
+      )}
     </SafeAreaView>
   )
 }
@@ -291,7 +298,13 @@ const styles = StyleSheet.create({
   cardTitleUnread: { color: '#ffffff' },
   cardMessage: { fontSize: 13, color: '#6b8f71', lineHeight: 18, marginBottom: 6 },
   cardTime: { fontSize: 11, color: '#4a7a54' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    zIndex: 50,
+  },
+  modalKav: { flex: 1, justifyContent: 'flex-end' },
   modalCard: { backgroundColor: '#102e1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 48, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   modalTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', flex: 1, marginRight: 8 },

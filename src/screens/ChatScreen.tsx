@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react'
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, ActivityIndicator, SafeAreaView, KeyboardAvoidingView,
+  TextInput, ActivityIndicator, KeyboardAvoidingView,
   Platform, Modal, Alert,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { supabase } from '../lib/supabase'
 
 type Room = {
@@ -341,25 +342,29 @@ export default function ChatScreen() {
           </View>
         </View>
 
-        {msgLoading ? (
-          <View style={styles.center}><ActivityIndicator color="#c9a84c" size="large" /></View>
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={i => i.id}
-            renderItem={renderMessage}
-            contentContainerStyle={{ padding: 16, gap: 8, flexGrow: 1 }}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-            ListEmptyComponent={
-              <View style={styles.center}>
-                <Text style={styles.emptyText}>No messages yet. Say hello! 👋</Text>
-              </View>
-            }
-          />
-        )}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          {msgLoading ? (
+            <View style={styles.center}><ActivityIndicator color="#c9a84c" size="large" /></View>
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={i => i.id}
+              renderItem={renderMessage}
+              contentContainerStyle={{ padding: 16, gap: 8, flexGrow: 1 }}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+              ListEmptyComponent={
+                <View style={styles.center}>
+                  <Text style={styles.emptyText}>No messages yet. Say hello! 👋</Text>
+                </View>
+              }
+            />
+          )}
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.inputRow}>
             <TextInput
               style={styles.msgInput}
@@ -382,6 +387,7 @@ export default function ChatScreen() {
       </SafeAreaView>
     )
   }
+
 
   // Room list view
   return (

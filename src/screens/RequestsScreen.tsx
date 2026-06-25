@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Modal, TextInput, ActivityIndicator, SafeAreaView,
+  TextInput, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, Alert,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../lib/supabase'
 
@@ -271,147 +272,153 @@ await supabase.from('notifications').insert({
         />
       )}
 
-      {/* Detail Modal */}
-<Modal visible={!!detailRequest} animationType="slide" transparent>
-  <KeyboardAvoidingView
-    style={styles.modalOverlay}
-    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-  >
-    <View style={styles.modalCard}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.modalTitle}>{detailRequest?.title}</Text>
-
-        <View style={styles.detailRow}>
-          <View style={[styles.badge, {
-            borderColor: STATUS_COLOR[detailRequest?.status ?? 'pending'],
-            backgroundColor: STATUS_COLOR[detailRequest?.status ?? 'pending'] + '22'
-          }]}>
-            <Text style={[styles.badgeText, { color: STATUS_COLOR[detailRequest?.status ?? 'pending'] }]}>
-              {detailRequest?.status?.toUpperCase()}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <View style={[styles.priorityDot, { backgroundColor: PRIORITY_COLOR[detailRequest?.priority ?? 'Medium'] }]} />
-            <Text style={styles.metaText}>{detailRequest?.priority} Priority</Text>
-          </View>
-        </View>
-
-        <Text style={styles.label}>Type</Text>
-        <Text style={styles.detailValue}>{detailRequest?.request_type}</Text>
-
-        <Text style={styles.label}>
-          {detailRequest?.requested_by === profile?.id ? 'Sent To' : 'Sent By'}
-        </Text>
-        <Text style={styles.detailValue}>
-          {detailRequest?.requested_by === profile?.id
-            ? detailRequest?.recipient_name
-            : detailRequest?.sender_name}
-        </Text>
-
-        <Text style={styles.label}>Description</Text>
-        <Text style={styles.detailValue}>{detailRequest?.description}</Text>
-
-        <Text style={styles.label}>Date</Text>
-        <Text style={styles.detailValue}>
-          {detailRequest ? new Date(detailRequest.created_at).toLocaleDateString('en-GB', {
-            day: 'numeric', month: 'long', year: 'numeric'
-          }) : ''}
-        </Text>
-
-        {detailRequest?.recipient_id === profile?.id && detailRequest?.status === 'pending' && (
-          <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: '#1e4d2b', paddingTop: 16 }}>
-            <Text style={styles.label}>Response Message</Text>
-            <TextInput
-              style={[styles.input, { height: 80, marginBottom: 12 }]}
-              placeholder="Add a response message..."
-              placeholderTextColor="#4a7a54"
-              value={responseMsg}
-              onChangeText={setResponseMsg}
-              multiline
-              textAlignVertical="top"
-            />
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.actionBtn, { borderColor: '#4caf82', flex: 1, justifyContent: 'center', backgroundColor: '#4caf8222' }]}
-                onPress={() => updateStatus(detailRequest.id, 'approved')}
-              >
-                <Text style={[styles.actionBtnText, { color: '#4caf82' }]}>✓ Approve</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, { borderColor: '#e05c5c', flex: 1, justifyContent: 'center', backgroundColor: '#e05c5c22' }]}
-                onPress={() => updateStatus(detailRequest.id, 'rejected')}
-              >
-                <Text style={[styles.actionBtnText, { color: '#e05c5c' }]}>✕ Reject</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-        <TouchableOpacity
-          style={styles.closeBar}
-          onPress={() => { setDetailRequest(null); setResponseMsg('') }}
-        >
-          <Text style={styles.closeBarText}>Close</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
-  </KeyboardAvoidingView>
-</Modal>
-
-
-      {/* New Request Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+{/* Detail Overlay */}
+      {!!detailRequest && (
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            style={styles.modalKav}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
             <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>New Request</Text>
-              <Text style={styles.label}>Recipient</Text>
-              <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowRecipientPicker(!showRecipientPicker)}>
-                <Text style={selectedRecipient ? styles.recipientSelected : styles.recipientPlaceholder}>
-                  {selectedRecipient ? selectedRecipient.full_name : 'Select recipient...'}
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={styles.modalTitle}>{detailRequest?.title}</Text>
+
+                <View style={styles.detailRow}>
+                  <View style={[styles.badge, {
+                    borderColor: STATUS_COLOR[detailRequest?.status ?? 'pending'],
+                    backgroundColor: STATUS_COLOR[detailRequest?.status ?? 'pending'] + '22'
+                  }]}>
+                    <Text style={[styles.badgeText, { color: STATUS_COLOR[detailRequest?.status ?? 'pending'] }]}>
+                      {detailRequest?.status?.toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={[styles.priorityDot, { backgroundColor: PRIORITY_COLOR[detailRequest?.priority ?? 'Medium'] }]} />
+                    <Text style={styles.metaText}>{detailRequest?.priority} Priority</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.label}>Type</Text>
+                <Text style={styles.detailValue}>{detailRequest?.request_type}</Text>
+
+                <Text style={styles.label}>
+                  {detailRequest?.requested_by === profile?.id ? 'Sent To' : 'Sent By'}
                 </Text>
-                <Text style={styles.chevron}>{showRecipientPicker ? '▲' : '▼'}</Text>
-              </TouchableOpacity>
-              {showRecipientPicker && (
-                <View style={styles.recipientDropdown}>
-                  {orgProfiles.map(p => (
-                    <TouchableOpacity key={p.id} style={[styles.recipientOption, recipientId === p.id && styles.recipientOptionActive]} onPress={() => { setRecipientId(p.id); setShowRecipientPicker(false) }}>
-                      <Text style={[styles.recipientOptionText, recipientId === p.id && { color: '#0d2818' }]}>{p.full_name}</Text>
+                <Text style={styles.detailValue}>
+                  {detailRequest?.requested_by === profile?.id
+                    ? detailRequest?.recipient_name
+                    : detailRequest?.sender_name}
+                </Text>
+
+                <Text style={styles.label}>Description</Text>
+                <Text style={styles.detailValue}>{detailRequest?.description}</Text>
+
+                <Text style={styles.label}>Date</Text>
+                <Text style={styles.detailValue}>
+                  {detailRequest ? new Date(detailRequest.created_at).toLocaleDateString('en-GB', {
+                    day: 'numeric', month: 'long', year: 'numeric'
+                  }) : ''}
+                </Text>
+
+                {detailRequest?.recipient_id === profile?.id && detailRequest?.status === 'pending' && (
+                  <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: '#1e4d2b', paddingTop: 16 }}>
+                    <Text style={styles.label}>Response Message</Text>
+                    <TextInput
+                      style={[styles.input, { height: 80, marginBottom: 12 }]}
+                      placeholder="Add a response message..."
+                      placeholderTextColor="#4a7a54"
+                      value={responseMsg}
+                      onChangeText={setResponseMsg}
+                      multiline
+                      textAlignVertical="top"
+                    />
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { borderColor: '#4caf82', flex: 1, justifyContent: 'center', backgroundColor: '#4caf8222' }]}
+                        onPress={() => updateStatus(detailRequest.id, 'approved')}
+                      >
+                        <Text style={[styles.actionBtnText, { color: '#4caf82' }]}>✓ Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { borderColor: '#e05c5c', flex: 1, justifyContent: 'center', backgroundColor: '#e05c5c22' }]}
+                        onPress={() => updateStatus(detailRequest.id, 'rejected')}
+                      >
+                        <Text style={[styles.actionBtnText, { color: '#e05c5c' }]}>✕ Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={styles.closeBar}
+                  onPress={() => { setDetailRequest(null); setResponseMsg('') }}
+                >
+                  <Text style={styles.closeBarText}>Close</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      )}
+
+      {/* New Request Overlay */}
+      {modalVisible && (
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            style={styles.modalKav}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View style={styles.modalCard}>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={styles.modalTitle}>New Request</Text>
+                <Text style={styles.label}>Recipient</Text>
+                <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowRecipientPicker(!showRecipientPicker)}>
+                  <Text style={selectedRecipient ? styles.recipientSelected : styles.recipientPlaceholder}>
+                    {selectedRecipient ? selectedRecipient.full_name : 'Select recipient...'}
+                  </Text>
+                  <Text style={styles.chevron}>{showRecipientPicker ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+                {showRecipientPicker && (
+                  <View style={styles.recipientDropdown}>
+                    {orgProfiles.map(p => (
+                      <TouchableOpacity key={p.id} style={[styles.recipientOption, recipientId === p.id && styles.recipientOptionActive]} onPress={() => { setRecipientId(p.id); setShowRecipientPicker(false) }}>
+                        <Text style={[styles.recipientOptionText, recipientId === p.id && { color: '#0d2818' }]}>{p.full_name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                <Text style={styles.label}>Request Type</Text>
+                <View style={styles.typeRow}>
+                  {['General', 'Material', 'Equipment', 'Financial', 'HR'].map(t => (
+                    <TouchableOpacity key={t} style={[styles.typeBtn, requestType === t && styles.typeBtnActive]} onPress={() => setRequestType(t)}>
+                      <Text style={[styles.typeBtnText, requestType === t && styles.typeBtnTextActive]}>{t}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
-              )}
-              <Text style={styles.label}>Request Type</Text>
-              <View style={styles.typeRow}>
-                {['General', 'Material', 'Equipment', 'Financial', 'HR'].map(t => (
-                  <TouchableOpacity key={t} style={[styles.typeBtn, requestType === t && styles.typeBtnActive]} onPress={() => setRequestType(t)}>
-                    <Text style={[styles.typeBtnText, requestType === t && styles.typeBtnTextActive]}>{t}</Text>
+                <Text style={styles.label}>Priority</Text>
+                <View style={styles.typeRow}>
+                  {['Low', 'Medium', 'High', 'Critical'].map(p => (
+                    <TouchableOpacity key={p} style={[styles.typeBtn, priority === p && styles.typeBtnActive]} onPress={() => setPriority(p)}>
+                      <Text style={[styles.typeBtnText, priority === p && styles.typeBtnTextActive]}>{p}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.label}>Title</Text>
+                <TextInput style={styles.input} placeholder="e.g. Equipment needed on site" placeholderTextColor="#4a7a54" value={title} onChangeText={setTitle} />
+                <Text style={styles.label}>Description</Text>
+                <TextInput style={[styles.input, styles.textarea]} placeholder="Describe your request..." placeholderTextColor="#4a7a54" value={description} onChangeText={setDescription} multiline numberOfLines={4} textAlignVertical="top" />
+                <View style={styles.modalBtns}>
+                  <TouchableOpacity style={styles.cancelBtn} onPress={() => { setModalVisible(false); resetForm() }}>
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={styles.label}>Priority</Text>
-              <View style={styles.typeRow}>
-                {['Low', 'Medium', 'High', 'Critical'].map(p => (
-                  <TouchableOpacity key={p} style={[styles.typeBtn, priority === p && styles.typeBtnActive]} onPress={() => setPriority(p)}>
-                    <Text style={[styles.typeBtnText, priority === p && styles.typeBtnTextActive]}>{p}</Text>
+                  <TouchableOpacity style={[styles.submitBtn, submitting && { opacity: 0.6 }]} onPress={submitRequest} disabled={submitting}>
+                    {submitting ? <ActivityIndicator color="#0d2818" /> : <Text style={styles.submitBtnText}>Submit</Text>}
                   </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={styles.label}>Title</Text>
-              <TextInput style={styles.input} placeholder="e.g. Equipment needed on site" placeholderTextColor="#4a7a54" value={title} onChangeText={setTitle} />
-              <Text style={styles.label}>Description</Text>
-              <TextInput style={[styles.input, styles.textarea]} placeholder="Describe your request..." placeholderTextColor="#4a7a54" value={description} onChangeText={setDescription} multiline numberOfLines={4} textAlignVertical="top" />
-              <View style={styles.modalBtns}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => { setModalVisible(false); resetForm() }}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.submitBtn, submitting && { opacity: 0.6 }]} onPress={submitRequest} disabled={submitting}>
-                  {submitting ? <ActivityIndicator color="#0d2818" /> : <Text style={styles.submitBtnText}>Submit</Text>}
-                </TouchableOpacity>
-              </View>
+                </View>
+              </ScrollView>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Modal>
+          </KeyboardAvoidingView>
+        </View>
+      )}
     </SafeAreaView>
   )
 }
@@ -457,7 +464,13 @@ const styles = StyleSheet.create({
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
   detailValue: { fontSize: 15, color: '#ffffff', marginBottom: 16, lineHeight: 22 },
   closeBtn: { fontSize: 18, color: '#6b8f71', padding: 4 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    zIndex: 50,
+  },
+  modalKav: { flex: 1, justifyContent: 'flex-end' },
   modalCard: { backgroundColor: '#102e1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 48, maxHeight: '92%' },
   modalTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', marginBottom: 20 },
   label: { fontSize: 13, fontWeight: '600', color: '#c9a84c', marginBottom: 6 },
