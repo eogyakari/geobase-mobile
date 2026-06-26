@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import * as ImagePicker from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
 import { supabase } from '../lib/supabase'
+import { ATTACHMENT_REQUIRED_TYPES, getAssigneePool } from '../shared/requestRules'
 
 type Request = {
   id: string
@@ -46,19 +47,16 @@ const PRIORITY_COLOR: Record<string, string> = {
   Critical: '#e05c5c',
 }
 
-const ASSIGNEE_ROLE_MAP: Record<string, string[]> = {
-  Leave: ['HR Manager', 'Admin'],
-  'Petty Cash': ['Finance Director', 'Accountant'],
-  Material: ['Site Supervisor', 'Project Manager', 'Procurement Officer'],
-  // General intentionally unmapped — stays unfiltered
+// Mobile stores short request_type values ('Leave', 'Petty Cash', 'Material') while
+// shared/requestRules.ts (and web) key on the full names ('Leave Request', etc).
+// Translate here at the call site only — this does not change what's stored or displayed.
+const MOBILE_TO_SHARED_TYPE: Record<string, string> = {
+  Leave: 'Leave Request',
+  'Petty Cash': 'Petty Cash Request',
+  Material: 'Material Request',
 }
-
-const ATTACHMENT_REQUIRED_TYPES = new Set(['Leave', 'Petty Cash', 'Material'])
-
-function getAssigneePool(requestType: string, allProfiles: Profile[]) {
-  const allowedRoles = ASSIGNEE_ROLE_MAP[requestType]
-  if (!allowedRoles) return allProfiles
-  return allProfiles.filter(p => allowedRoles.includes(p.role_name ?? ''))
+function toSharedType(requestType: string) {
+  return MOBILE_TO_SHARED_TYPE[requestType] ?? requestType
 }
 
 function buildRequestExtras(requestType: string, s: { leaveFrom: string; leaveTo: string; amount: string }) {
@@ -341,7 +339,7 @@ export default function RequestsScreen() {
 
   const handleComplete = async () => {
     if (!detailRequest) return
-    const attachmentRequired = ATTACHMENT_REQUIRED_TYPES.has(detailRequest.request_type)
+    const attachmentRequired = ATTACHMENT_REQUIRED_TYPES.has(toSharedType(detailRequest.request_type))
 
     if (attachmentRequired && !completionFile) {
       Alert.alert('Attachment Required', `${detailRequest.request_type} requests require a document before marking as completed.`)
@@ -418,6 +416,10 @@ export default function RequestsScreen() {
   const toCompleteList = requests.filter((r: any) =>
     r.assigned_to === profile?.id && r.status === 'approved' && !r.completed_at
   )
+  // shared/requestRules.ts's getAssigneePool expects web's profile shape (role.name);
+  // mobile's Profile carries role_name flat — adapt once here, not in the shared file.
+
+  const assigneePoolSource = orgProfiles.map(p => ({ ...p, role: { name: p.role_name } }))
   const activeList = tab === 'mine' ? myRequests : tab === 'inbox' ? inbox : toCompleteList
   const filtered = filter === 'all' ? activeList : activeList.filter(r => r.status === filter)
   const pendingCount = activeList.filter(r => r.status === 'pending').length
@@ -609,7 +611,7 @@ export default function RequestsScreen() {
                         </TouchableOpacity>
                         {showAssigneePicker && (
                           <View style={styles.recipientDropdown}>
-                            {getAssigneePool(detailRequest.request_type, orgProfiles).map(p => (
+                            {getAssigneePool(toSharedType(detailRequest.request_type), assigneePoolSource).map(p => (
                               <TouchableOpacity
                                 key={p.id}
                                 style={[styles.recipientOption, assigneeId === p.id && styles.recipientOptionActive]}
@@ -657,8 +659,8 @@ export default function RequestsScreen() {
                       textAlignVertical="top"
                     />
 
-                    <Text style={styles.label}>
-                      Attach File {ATTACHMENT_REQUIRED_TYPES.has(detailRequest.request_type) ? '(required)' : '(optional)'}
+                   <Text style={styles.label}>
+                      Attach File {ATTACHMENT_REQUIRED_TYPES.has(toSharedType(detailRequest.request_type)) ? '(required)' : '(optional)'}
                     </Text>
                     <TouchableOpacity
                       style={[styles.recipientPicker, { marginBottom: 8 }]}
