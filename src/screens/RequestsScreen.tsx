@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator,
-  KeyboardAvoidingView, Platform, ScrollView, Alert,
+  KeyboardAvoidingView, Platform, ScrollView, Alert, Linking,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native'
@@ -23,9 +23,15 @@ type Request = {
   recipient_id: string
   assigned_to?: string
   completed_at?: string
+  completed_by?: string
+  completion_notes?: string
+  response_attachment_url?: string
   sender_name?: string
   recipient_name?: string
+  assignee_name?: string
+  completed_by_name?: string
 }
+
 
 type Profile = {
   id: string
@@ -37,6 +43,7 @@ type Profile = {
 const STATUS_COLOR: Record<string, string> = {
   pending: '#c9a84c',
   approved: '#4caf82',
+  completed: '#64b5f6',
   rejected: '#e05c5c',
 }
 
@@ -74,9 +81,9 @@ function buildRequestExtras(requestType: string, s: { leaveFrom: string; leaveTo
   return { start_date, end_date, amount }
 }
 
-export default function RequestsScreen() {
+export default function RequestsScreen({ route, navigation }: any) {
   const [tab, setTab] = useState<'mine' | 'inbox' | 'complete'>('mine')
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'completed' | 'rejected'>('all')
   const [requests, setRequests] = useState<Request[]>([])
   const [loading, setLoading] = useState(true)
   const [modalVisible, setModalVisible] = useState(false)
@@ -135,6 +142,8 @@ export default function RequestsScreen() {
         const ids = [...new Set([
           ...reqData.map((r: any) => r.requested_by).filter(Boolean),
           ...reqData.map((r: any) => r.recipient_id).filter(Boolean),
+          ...reqData.map((r: any) => r.assigned_to).filter(Boolean),
+          ...reqData.map((r: any) => r.completed_by).filter(Boolean),
         ])]
         const { data: names } = await supabase
           .from('profiles')
@@ -146,6 +155,8 @@ export default function RequestsScreen() {
           ...r,
           sender_name: nameMap[r.requested_by] ?? '—',
           recipient_name: nameMap[r.recipient_id] ?? '—',
+          assignee_name: r.assigned_to ? (nameMap[r.assigned_to] ?? '—') : undefined,
+          completed_by_name: r.completed_by ? (nameMap[r.completed_by] ?? '—') : undefined,
         })))
       } else {
         setRequests([])
@@ -411,6 +422,16 @@ export default function RequestsScreen() {
     }
   }
 
+  useEffect(() => {
+    const targetId = route?.params?.openRequestId
+    if (!targetId) return
+    const found = requests.find(r => r.id === targetId)
+    if (found) {
+      setDetailRequest(found)
+      navigation.setParams({ openRequestId: undefined })
+    }
+  }, [route?.params?.openRequestId, requests])
+
   const myRequests = requests.filter(r => r.requested_by === profile?.id)
   const inbox = requests.filter(r => r.recipient_id === profile?.id)
   const toCompleteList = requests.filter((r: any) =>
@@ -424,8 +445,10 @@ export default function RequestsScreen() {
   const filtered = filter === 'all' ? activeList : activeList.filter(r => r.status === filter)
   const pendingCount = activeList.filter(r => r.status === 'pending').length
   const approvedCount = activeList.filter(r => r.status === 'approved').length
+  const completedCount = activeList.filter(r => r.status === 'completed').length
   const rejectedCount = activeList.filter(r => r.status === 'rejected').length
   const selectedRecipient = orgProfiles.find(p => p.id === recipientId)
+  const completedAttachmentUrl = detailRequest?.response_attachment_url
 
   const renderItem = ({ item }: { item: Request }) => (
     <TouchableOpacity style={styles.card} onPress={() => setDetailRequest(item)}>
@@ -461,17 +484,17 @@ export default function RequestsScreen() {
       </View>
 
       <View style={styles.tabRow}>
-        <TouchableOpacity style={[styles.tabBtn, tab === 'mine' && styles.tabBtnActive]} onPress={() => setTab('mine')}>
+        <TouchableOpacity style={[styles.tabBtn, tab === 'mine' && styles.tabBtnActive]} onPress={() => { setTab('mine'); setFilter('all') }}>
           <Text style={[styles.tabText, tab === 'mine' && styles.tabTextActive]}>
             Mine {myRequests.length > 0 ? `(${myRequests.length})` : ''}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabBtn, tab === 'inbox' && styles.tabBtnActive]} onPress={() => setTab('inbox')}>
+        <TouchableOpacity style={[styles.tabBtn, tab === 'inbox' && styles.tabBtnActive]} onPress={() => { setTab('inbox'); setFilter('all') }}>
           <Text style={[styles.tabText, tab === 'inbox' && styles.tabTextActive]}>
             Inbox {inbox.filter(r => r.status === 'pending').length > 0 ? `(${inbox.filter(r => r.status === 'pending').length})` : ''}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabBtn, tab === 'complete' && styles.tabBtnActive]} onPress={() => setTab('complete')}>
+        <TouchableOpacity style={[styles.tabBtn, tab === 'complete' && styles.tabBtnActive]} onPress={() => { setTab('complete'); setFilter('all') }}>
           <Text style={[styles.tabText, tab === 'complete' && styles.tabTextActive]}>
             To Do {toCompleteList.length > 0 ? `(${toCompleteList.length})` : ''}
           </Text>
@@ -487,6 +510,10 @@ export default function RequestsScreen() {
           <Text style={styles.statNum}>{approvedCount}</Text>
           <Text style={styles.statLabel}>Approved</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={[styles.statCard, { borderTopColor: '#64b5f6' }, filter === 'completed' && styles.statCardActive]} onPress={() => setFilter(filter === 'completed' ? 'all' : 'completed')}>
+          <Text style={styles.statNum}>{completedCount}</Text>
+          <Text style={styles.statLabel}>Completed</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={[styles.statCard, { borderTopColor: '#e05c5c' }, filter === 'rejected' && styles.statCardActive]} onPress={() => setFilter(filter === 'rejected' ? 'all' : 'rejected')}>
           <Text style={styles.statNum}>{rejectedCount}</Text>
           <Text style={styles.statLabel}>Rejected</Text>
@@ -494,7 +521,7 @@ export default function RequestsScreen() {
       </View>
 
       <View style={styles.filterRow}>
-        {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
+        {(['all', 'pending', 'approved', 'completed', 'rejected'] as const).map(f => (
           <TouchableOpacity key={f} style={[styles.filterTab, filter === f && styles.filterTabActive]} onPress={() => setFilter(f)}>
             <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>{f.charAt(0).toUpperCase() + f.slice(1)}</Text>
           </TouchableOpacity>
@@ -569,6 +596,35 @@ export default function RequestsScreen() {
                     day: 'numeric', month: 'long', year: 'numeric'
                   }) : ''}
                 </Text>
+
+                {detailRequest?.status === 'completed' && (
+                  <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: '#1e4d2b', paddingTop: 16 }}>
+                    <Text style={styles.label}>Completed By</Text>
+                    <Text style={styles.detailValue}>{detailRequest?.completed_by_name ?? '—'}</Text>
+
+                    <Text style={styles.label}>Completed On</Text>
+                    <Text style={styles.detailValue}>
+                      {detailRequest?.completed_at ? new Date(detailRequest.completed_at).toLocaleDateString('en-GB', {
+                        day: 'numeric', month: 'long', year: 'numeric'
+                      }) : '—'}
+                    </Text>
+
+                    {detailRequest?.completion_notes && (
+                      <>
+                        <Text style={styles.label}>Completion Notes</Text>
+                        <Text style={styles.detailValue}>{detailRequest.completion_notes}</Text>
+                      </>
+                    )}
+
+                    {completedAttachmentUrl && (
+                      <TouchableOpacity onPress={() => Linking.openURL(completedAttachmentUrl)}>
+                        <Text style={{ color: '#c9a84c', fontWeight: '600', fontSize: 13, marginBottom: 4 }}>
+                          📎 View Attachment
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
 
                 {detailRequest?.recipient_id === profile?.id && detailRequest?.status === 'pending' && (
                   <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: '#1e4d2b', paddingTop: 16 }}>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, ActivityIndicator, SafeAreaView,
+  ScrollView, ActivityIndicator,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { supabase } from '../lib/supabase'
 import RequestsScreen from './RequestsScreen'
@@ -30,7 +31,7 @@ function DashboardTab({ profile, navigation }: { profile: any; navigation: any }
         supabase.from('requests').select('*', { count: 'exact', head: true })
           .eq('organization_id', profile.organization_id).eq('status', 'pending'),
         supabase.from('notifications').select('*', { count: 'exact', head: true })
-          .eq('user_id', profile.id).eq('is_read', false),
+          .eq('recipient_id', profile.id).eq('is_read', false),
       ])
       setStats({ projects: pCount ?? 0, requests: rCount ?? 0, notifications: nCount ?? 0 })
     }
@@ -116,6 +117,17 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true)
   const [notifCount, setNotifCount] = useState(0)
 
+  const refreshNotifCount = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { count } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('recipient_id', user.id)
+      .eq('is_read', false)
+    setNotifCount(count ?? 0)
+  }
+
   const loadProfile = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -127,12 +139,7 @@ export default function HomeScreen() {
         .single()
       if (data) setProfile({ ...data, role_name: data.roles?.name ?? '' })
 
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('recipient_id', user.id)
-        .eq('is_read', false)
-      setNotifCount(count ?? 0)
+      await refreshNotifCount()
     } finally {
       setLoading(false)
     }
@@ -169,7 +176,7 @@ export default function HomeScreen() {
         name="Requests"
         options={{ tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📋</Text> }}
       >
-        {() => <RequestsScreen />}
+        {(props) => <RequestsScreen {...props} />}
       </Tab.Screen>
       <Tab.Screen
         name="Chat"
@@ -185,7 +192,7 @@ export default function HomeScreen() {
           tabBarBadgeStyle: { backgroundColor: '#e05c5c', fontSize: 10 },
         }}
       >
-        {() => <NotificationsScreen />}
+        {(props) => <NotificationsScreen {...props} onChanged={refreshNotifCount} />}
       </Tab.Screen>
       <Tab.Screen
         name="Site Log"
