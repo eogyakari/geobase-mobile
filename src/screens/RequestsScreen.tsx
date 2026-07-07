@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import * as ImagePicker from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
 import { supabase } from '../lib/supabase'
-import { ATTACHMENT_REQUIRED_TYPES, getAssigneePool } from '../shared/requestRules'
+import { ATTACHMENT_REQUIRED_TYPES, getAssigneePool, getRecipientPool, canRoleComplete } from '../shared/requestRules'
 
 type Request = {
   id: string
@@ -66,19 +66,21 @@ function toSharedType(requestType: string) {
   return MOBILE_TO_SHARED_TYPE[requestType] ?? requestType
 }
 
-function buildRequestExtras(requestType: string, s: { leaveFrom: string; leaveTo: string; amount: string }) {
+function buildRequestExtras(requestType: string, s: { leaveFrom: string; leaveTo: string; amount: string; pettyCashProjectId: string; pettyCashPurpose: string }) {
   let start_date: string | null = null
   let end_date: string | null = null
   let amount: number | null = null
+  let details: Record<string, any> | null = null
 
   if (requestType === 'Leave') {
     start_date = s.leaveFrom || null
     end_date = s.leaveTo || null
   } else if (requestType === 'Petty Cash') {
     amount = s.amount ? Number(s.amount) : null
+    details = { projectId: s.pettyCashProjectId || null, purpose: s.pettyCashPurpose || null }
   }
 
-  return { start_date, end_date, amount }
+  return { start_date, end_date, amount, details }
 }
 
 export default function RequestsScreen({ route, navigation }: any) {
@@ -90,6 +92,10 @@ export default function RequestsScreen({ route, navigation }: any) {
   const [detailRequest, setDetailRequest] = useState<Request | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [orgProfiles, setOrgProfiles] = useState<Profile[]>([])
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
+  const [pettyCashProjectId, setPettyCashProjectId] = useState('')
+  const [pettyCashPurpose, setPettyCashPurpose] = useState('')
+  const [showProjectPicker, setShowProjectPicker] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [requestType, setRequestType] = useState('General')
@@ -131,6 +137,13 @@ export default function RequestsScreen({ route, navigation }: any) {
         .eq('organization_id', myProfile.organization_id)
         .neq('id', user.id)
       setOrgProfiles((profileList ?? []).map((p: any) => ({ ...p, role_name: p.roles?.name ?? '' })))
+
+      const { data: projectList } = await supabase
+        .from('projects')
+        .select('id, name')
+        .eq('organization_id', myProfile.organization_id)
+        .order('name')
+      setProjects(projectList ?? [])
 
       const { data: reqData } = await supabase
         .from('requests')
@@ -174,6 +187,7 @@ export default function RequestsScreen({ route, navigation }: any) {
     setTitle(''); setDescription(''); setRequestType('General')
     setPriority('Medium'); setRecipientId(''); setShowRecipientPicker(false)
     setLeaveFrom(''); setLeaveTo(''); setAmount('')
+    setPettyCashProjectId(''); setPettyCashPurpose(''); setShowProjectPicker(false)
   }
 
   const submitRequest = async () => {
@@ -183,11 +197,14 @@ export default function RequestsScreen({ route, navigation }: any) {
     if (requestType === 'Leave' && (!leaveFrom || !leaveTo)) {
       return Alert.alert('Required', 'Please enter both start and end dates')
     }
+    if (requestType === 'Petty Cash' && (!pettyCashProjectId || !pettyCashPurpose.trim())) {
+      return Alert.alert('Required', 'Please select a project and enter a purpose')
+    }
     try {
       setSubmitting(true)
       const { data: { user } } = await supabase.auth.getUser()
 
-      const extras = buildRequestExtras(requestType, { leaveFrom, leaveTo, amount })
+      const extras = buildRequestExtras(requestType, { leaveFrom, leaveTo, amount, pettyCashProjectId, pettyCashPurpose })
 
       const { data: newRequest, error } = await supabase
         .from('requests')
@@ -198,6 +215,7 @@ export default function RequestsScreen({ route, navigation }: any) {
           amount: extras.amount,
           start_date: extras.start_date,
           end_date: extras.end_date,
+          details: extras.details,
           priority,
           status: 'pending',
           requested_by: user!.id,
@@ -260,13 +278,15 @@ export default function RequestsScreen({ route, navigation }: any) {
 
   const handleApprove = async () => {
     if (!detailRequest) return
-    if (completionMode === 'assign' && !assigneeId) {
+    const canSelfComplete = canRoleComplete(toSharedType(detailRequest.request_type), profile?.role_name)
+    const finalMode = canSelfComplete ? completionMode : 'assign'
+    if (finalMode === 'assign' && !assigneeId) {
       Alert.alert('Required', 'Please select someone to complete this request')
       return
     }
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      const finalAssignee = completionMode === 'self' ? user!.id : assigneeId
+      const finalAssignee = finalMode === 'self' ? user!.id : assigneeId
       const nowIso = new Date().toISOString()
 
       const { error } = await supabase.from('requests').update({
@@ -641,12 +661,14 @@ export default function RequestsScreen({ route, navigation }: any) {
 
                     <Text style={styles.label}>Who Will Complete This?</Text>
                     <View style={[styles.typeRow, { marginBottom: 12 }]}>
-                      <TouchableOpacity
-                        style={[styles.typeBtn, completionMode === 'self' && styles.typeBtnActive, { flex: 1 }]}
-                        onPress={() => setCompletionMode('self')}
-                      >
-                        <Text style={[styles.typeBtnText, completionMode === 'self' && styles.typeBtnTextActive]}>I'll Do It</Text>
-                      </TouchableOpacity>
+                      {canRoleComplete(toSharedType(detailRequest.request_type), profile?.role_name) && (
+                        <TouchableOpacity
+                          style={[styles.typeBtn, completionMode === 'self' && styles.typeBtnActive, { flex: 1 }]}
+                          onPress={() => setCompletionMode('self')}
+                        >
+                          <Text style={[styles.typeBtnText, completionMode === 'self' && styles.typeBtnTextActive]}>I'll Do It</Text>
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity
                         style={[styles.typeBtn, completionMode === 'assign' && styles.typeBtnActive, { flex: 1 }]}
                         onPress={() => setCompletionMode('assign')}
@@ -789,18 +811,17 @@ export default function RequestsScreen({ route, navigation }: any) {
                 </TouchableOpacity>
                 {showRecipientPicker && (
                   <View style={styles.recipientDropdown}>
-                    {orgProfiles.map(p => (
+                    {getRecipientPool(toSharedType(requestType), orgProfiles.map(p => ({ ...p, role: { name: p.role_name } }))).map((p: any) => (
                       <TouchableOpacity key={p.id} style={[styles.recipientOption, recipientId === p.id && styles.recipientOptionActive]} onPress={() => { setRecipientId(p.id); setShowRecipientPicker(false) }}>
-                        <Text style={[styles.recipientOptionText, recipientId === p.id && { color: '#0d2818' }]}>{p.full_name}</Text>
+                        <Text style={[styles.recipientOptionText, recipientId === p.id && { color: '#0d2818' }]}>{p.full_name}{p.role_name ? ` (${p.role_name})` : ''}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
 
-                <Text style={styles.label}>Request Type</Text>
                 <View style={styles.typeRow}>
                   {['General', 'Leave', 'Petty Cash', 'Material'].map(t => (
-                    <TouchableOpacity key={t} style={[styles.typeBtn, requestType === t && styles.typeBtnActive]} onPress={() => setRequestType(t)}>
+                    <TouchableOpacity key={t} style={[styles.typeBtn, requestType === t && styles.typeBtnActive]} onPress={() => { setRequestType(t); setRecipientId('') }}>
                       <Text style={[styles.typeBtnText, requestType === t && styles.typeBtnTextActive]}>{t}</Text>
                     </TouchableOpacity>
                   ))}
@@ -829,6 +850,38 @@ export default function RequestsScreen({ route, navigation }: any) {
 
                 {requestType === 'Petty Cash' && (
                   <>
+                    <Text style={styles.label}>Project</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
+                      <Text style={pettyCashProjectId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {pettyCashProjectId
+                          ? projects.find(p => p.id === pettyCashProjectId)?.name
+                          : 'Select project...'}
+                      </Text>
+                      <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showProjectPicker && (
+                      <View style={styles.recipientDropdown}>
+                        {projects.map(p => (
+                          <TouchableOpacity
+                            key={p.id}
+                            style={[styles.recipientOption, pettyCashProjectId === p.id && styles.recipientOptionActive]}
+                            onPress={() => { setPettyCashProjectId(p.id); setShowProjectPicker(false) }}
+                          >
+                            <Text style={[styles.recipientOptionText, pettyCashProjectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Purpose</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. Site transport, minor tools"
+                      placeholderTextColor="#4a7a54"
+                      value={pettyCashPurpose}
+                      onChangeText={setPettyCashPurpose}
+                    />
+
                     <Text style={styles.label}>Amount (GHS)</Text>
                     <TextInput
                       style={styles.input}
