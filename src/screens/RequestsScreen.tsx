@@ -104,7 +104,7 @@ function buildRequestExtras(requestType: string, s: any) {
 
     case 'Petty Cash Request':
       amount = s.amount ? Number(s.amount) : null
-      details = { projectId: s.projectId || null, purpose: s.pettyCashPurpose || null }
+      details = { category: s.pettyCashCategory, projectId: s.pettyCashCategory === 'Project' ? (s.projectId || null) : null, purpose: s.pettyCashPurpose || null }
       break
 
     case 'Vendor Payment Request':
@@ -231,6 +231,7 @@ export default function RequestsScreen({ route, navigation }: any) {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
   const [projectId, setProjectId] = useState('')
   const [pettyCashPurpose, setPettyCashPurpose] = useState('')
+  const [pettyCashCategory, setPettyCashCategory] = useState('Project')
   const [showProjectPicker, setShowProjectPicker] = useState(false)
 
   // ── Finance fields ──
@@ -423,7 +424,7 @@ export default function RequestsScreen({ route, navigation }: any) {
     setTitle(''); setDescription(''); setRequestType('General Request')
     setPriority('Medium'); setRecipientId(''); setShowRecipientPicker(false)
     setLeaveFrom(''); setLeaveTo(''); setAmount('')
-    setProjectId(''); setPettyCashPurpose(''); setShowProjectPicker(false)
+    setProjectId(''); setPettyCashPurpose(''); setPettyCashCategory('Project'); setShowProjectPicker(false)
     setLogisticsType('')
     setVendorName(''); setVendorBank(''); setVendorAccNo(''); setVendorBranch(''); setInvoiceNo('')
     setFromAccount(''); setToAccount(''); setTransferPurpose('')
@@ -455,8 +456,11 @@ export default function RequestsScreen({ route, navigation }: any) {
       return Alert.alert('Required', 'Please enter both start and end dates')
     }
     
-    if (requestType === 'Petty Cash Request' && (!projectId || !pettyCashPurpose.trim())) {
-      return Alert.alert('Required', 'Please select a project and enter a purpose')
+    if (requestType === 'Petty Cash Request' && pettyCashCategory === 'Project' && !projectId) {
+      return Alert.alert('Required', 'Please select a project')
+    }
+    if (requestType === 'Petty Cash Request' && !pettyCashPurpose.trim()) {
+      return Alert.alert('Required', 'Please enter a purpose')
     }
     if (requestType === 'Vendor Payment Request' && !vendorName.trim()) {
       return Alert.alert('Required', 'Please enter the vendor / payee name')
@@ -493,8 +497,8 @@ export default function RequestsScreen({ route, navigation }: any) {
       setSubmitting(true)
       const { data: { user } } = await supabase.auth.getUser()
 
-    const extras = buildRequestExtras(requestType, {
-        leaveFrom, leaveTo, amount, projectId, pettyCashPurpose,
+    const extras = buildRequestExtras(requestType, { 
+      leaveFrom, leaveTo, amount, projectId, pettyCashPurpose, pettyCashCategory,
         vendorName, invoiceNo, vendorBank, vendorAccNo, vendorBranch,
         fromAccount, toAccount, transferPurpose,
         expDate, expCategory, receiptRef,
@@ -1161,27 +1165,44 @@ export default function RequestsScreen({ route, navigation }: any) {
 
                 {requestType === 'Petty Cash Request' && (
                   <>
-                    <Text style={styles.label}>Project</Text>
-                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
-                      <Text style={projectId ? styles.recipientSelected : styles.recipientPlaceholder}>
-                        {projectId
-                          ? projects.find(p => p.id === projectId)?.name
-                          : 'Select project...'}
-                      </Text>
-                      <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
-                    </TouchableOpacity>
-                    {showProjectPicker && (
-                      <View style={styles.recipientDropdown}>
-                        {projects.map(p => (
-                          <TouchableOpacity
-                            key={p.id}
-                            style={[styles.recipientOption, projectId === p.id && styles.recipientOptionActive]}
-                            onPress={() => { setProjectId(p.id); setShowProjectPicker(false) }}
-                          >
-                            <Text style={[styles.recipientOptionText, projectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
+                    <Text style={styles.label}>Category</Text>
+                    <View style={[styles.typeRow, { marginBottom: 12 }]}>
+                      {['Project', 'Administrative'].map(c => (
+                        <TouchableOpacity
+                          key={c}
+                          style={[styles.typeBtn, pettyCashCategory === c && styles.typeBtnActive, { flex: 1 }]}
+                          onPress={() => { setPettyCashCategory(c); if (c === 'Administrative') setProjectId('') }}
+                        >
+                          <Text style={[styles.typeBtnText, pettyCashCategory === c && styles.typeBtnTextActive]}>{c}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {pettyCashCategory === 'Project' && (
+                      <>
+                        <Text style={styles.label}>Project</Text>
+                        <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
+                          <Text style={projectId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                            {projectId
+                              ? projects.find(p => p.id === projectId)?.name
+                              : 'Select project...'}
+                          </Text>
+                          <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
+                        </TouchableOpacity>
+                        {showProjectPicker && (
+                          <View style={styles.recipientDropdown}>
+                            {projects.map(p => (
+                              <TouchableOpacity
+                                key={p.id}
+                                style={[styles.recipientOption, projectId === p.id && styles.recipientOptionActive]}
+                                onPress={() => { setProjectId(p.id); setShowProjectPicker(false) }}
+                              >
+                                <Text style={[styles.recipientOptionText, projectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+                      </>
                     )}
 
                     <Text style={styles.label}>Purpose</Text>
