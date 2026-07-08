@@ -54,6 +54,30 @@ const PRIORITY_COLOR: Record<string, string> = {
   Critical: '#e05c5c',
 }
 
+const requestOptions: Record<string, string[]> = {
+  CEO:                  ["General Request","Leave Request","Logistics Request"],
+  Admin:                ["General Request","Petty Cash Request","Procurement Request","Leave Request","Logistics Request"],
+  "Finance Director":   ["General Request","Vendor Payment Request","Fund Transfer Request","Internal Audit Request","Project Funding Request","Logistics Request"],
+  "HR Manager":         ["General Request","Recruitment Request","Petty Cash Request","Training Request","Disciplinary Action Request","Leave Request","Logistics Request"],
+  "Procurement Manager":["General Request","Budget Increase Request","Logistics Request"],
+  "Procurement Officer":["General Request","Inventory Request","Vendor Selection Request","Logistics Request"],
+  Auditor:              ["General Request","Audit Request","Logistics Request"],
+  Viewer:               ["General Request","Report Access Request","Logistics Request"],
+  "Quantity Surveyor":  ["General Request","BOQ Submission","Valuation Request","Variation Order Request","Cost Estimate Request","Logistics Request"],
+  "Project Manager":    ["General Request","Payment Request","Site Material Request","Leave Request","Logistics Request"],
+  "Site Supervisor":    ["General Request","Material Request","Leave Request","Logistics Request"],
+  Accountant:           ["General Request","Petty Cash Request","Expense Reimbursement Request","Leave Request","Logistics Request"],
+  default:              ["General Request","Leave Request","Petty Cash Request","Logistics Request"],
+}
+
+const LOGISTICS_TYPES = ["Vehicle Request","Accommodation Request","Fuel Request","Travel Request","Event Support Request"]
+const EXPENSE_CATEGORIES = ["Travel","Meals & Entertainment","Office Supplies","Equipment","Communication","Accommodation","Medical","Training","Other"]
+const AUDIT_TYPES = ["General Audit","Compliance Review","Financial Review","Operational Review","Risk Assessment","Internal Control Evaluation","Fraud Investigation","Regulatory Compliance Request"]
+const DISCIPLINARY_ACTIONS = ["Verbal Warning","Written Warning","Final Warning","Suspension","Termination","Performance Improvement Plan","Demotion"]
+const CONTRACT_TYPES = ["Fixed Price","Cost Reimbursable","Time & Materials","Framework Agreement","Service Level Agreement","Supply Agreement"]
+const RISK_LEVELS = ["Low","Medium","High","Critical"]
+// Note: Equipment Request intentionally excluded — its item-list UI stays web-only
+
 // Mobile stores short request_type values ('Leave', 'Petty Cash', 'Material') while
 // shared/requestRules.ts (and web) key on the full names ('Leave Request', etc).
 // Translate here at the call site only — this does not change what's stored or displayed.
@@ -66,21 +90,133 @@ function toSharedType(requestType: string) {
   return MOBILE_TO_SHARED_TYPE[requestType] ?? requestType
 }
 
-function buildRequestExtras(requestType: string, s: { leaveFrom: string; leaveTo: string; amount: string; pettyCashProjectId: string; pettyCashPurpose: string }) {
+function buildRequestExtras(requestType: string, s: any) {
   let start_date: string | null = null
   let end_date: string | null = null
   let amount: number | null = null
-  let details: Record<string, any> | null = null
+  let details: Record<string, any> = {}
 
-  if (requestType === 'Leave') {
-    start_date = s.leaveFrom || null
-    end_date = s.leaveTo || null
-  } else if (requestType === 'Petty Cash') {
-    amount = s.amount ? Number(s.amount) : null
-    details = { projectId: s.pettyCashProjectId || null, purpose: s.pettyCashPurpose || null }
+  switch (requestType) {
+    case 'Leave Request':
+      start_date = s.leaveFrom || null
+      end_date = s.leaveTo || null
+      break
+
+    case 'Petty Cash Request':
+      amount = s.amount ? Number(s.amount) : null
+      details = { projectId: s.projectId || null, purpose: s.pettyCashPurpose || null }
+      break
+
+    case 'Vendor Payment Request':
+      amount = s.amount ? Number(s.amount) : null
+      details = { vendorName: s.vendorName, invoiceNo: s.invoiceNo, projectId: s.projectId, vendorBank: s.vendorBank, vendorAccNo: s.vendorAccNo, vendorBranch: s.vendorBranch }
+      break
+
+    case 'Fund Transfer Request':
+      amount = s.amount ? Number(s.amount) : null
+      details = { fromAccount: s.fromAccount, toAccount: s.toAccount, projectId: s.projectId, transferPurpose: s.transferPurpose }
+      break
+
+    case 'Expense Reimbursement Request':
+      amount = s.amount ? Number(s.amount) : null
+      start_date = s.expDate || null
+      details = { category: s.expCategory, receiptRef: s.receiptRef }
+      break
+
+    case 'Internal Audit Request':
+      start_date = s.auditPeriodFrom || null
+      end_date = s.auditPeriodTo || null
+      details = { auditType: s.auditType, projectId: s.projectId, scope: s.auditScope }
+      break
+
+    case 'Project Funding Request':
+      amount = s.amount ? Number(s.amount) : null
+      details = { projectId: s.projectId, timeline: s.fundingTimeline, justification: s.fundingJustification }
+      break
+
+    case 'Recruitment Request':
+      end_date = s.recruitDueDate || null
+      details = { position: s.recruitPosition, department: s.recruitDept, vacancies: s.recruitVacancies, qualifications: s.recruitQual }
+      break
+
+    case 'Training Request':
+      start_date = s.trainDate || null
+      amount = s.trainCost ? Number(s.trainCost) : null
+      details = { type: s.trainType, provider: s.trainProvider, duration: s.trainDuration, staffCount: s.trainStaff }
+      break
+
+    case 'Disciplinary Action Request':
+      start_date = s.discIncidentDate || null
+      details = { employeeId: s.discEmployee, actionType: s.discActionType, description: s.discDesc, witnesses: s.discWitnesses }
+      break
+
+    case 'Contract Approval Request':
+      amount = s.contractValue ? Number(s.contractValue) : null
+      start_date = s.contractStartDate || null
+      details = { vendor: s.contractVendor, type: s.contractType, duration: s.contractDuration, terms: s.contractTerms, projectId: s.projectId }
+      break
+
+    case 'Budget Increase Request':
+      amount = s.budgetRequested ? Number(s.budgetRequested) : null
+      details = { projectId: s.projectId, currentBudget: s.budgetCurrent, requestedIncrease: s.budgetRequested, justification: s.budgetJustify }
+      break
+
+    case 'Vendor Selection Request':
+      amount = s.procCost ? Number(s.procCost) : null
+      end_date = s.vendorSelDeadline || null
+      details = { item: s.vendorSelItem, requirements: s.vendorSelReqs, projectId: s.projectId }
+      break
+      case 'Supplier Performance Review Request':
+      start_date = s.supplierPeriodFrom || null
+      end_date = s.supplierPeriodTo || null
+      details = { supplier: s.supplierName, kpis: s.supplierKPIs, projectId: s.projectId }
+      break
+
+    case 'Audit Request': {
+      start_date = s.auditPeriodFrom || null
+      end_date = s.auditPeriodTo || null
+      details = { auditSubType: s.auditSubType, projectId: s.projectId, scope: s.auditScope }
+
+      if (s.auditSubType === 'Compliance Review' || s.auditSubType === 'Regulatory Compliance Request') {
+        details = { ...details, complianceArea: s.complianceArea, regulations: s.complianceRegs }
+      } else if (s.auditSubType === 'Financial Review' || s.auditSubType === 'Operational Review') {
+        details = { ...details, departments: s.reviewDepts }
+      } else if (s.auditSubType === 'Internal Control Evaluation') {
+        details = { ...details, controlArea: s.controlArea }
+      } else if (s.auditSubType === 'Risk Assessment') {
+        details = { ...details, riskArea: s.riskArea, likelihood: s.riskLikelihood, impact: s.riskImpact, mitigation: s.riskMitigation }
+      } else if (s.auditSubType === 'Fraud Investigation') {
+        start_date = s.fraudIncidentDate || start_date
+        details = { ...details, parties: s.fraudParties, evidence: s.fraudEvidence }
+      }
+      break
+    }
+    case 'Logistics Request':
+      details = { logisticsType: s.logisticsType }
+      if (s.logisticsType === 'Vehicle Request') {
+        start_date = s.vehDate || null
+        details = { ...details, passengers: s.vehPassengers, destination: s.vehDest, purpose: s.vehPurpose }
+      } else if (s.logisticsType === 'Accommodation Request') {
+        start_date = s.accCheckIn || null
+        end_date = s.accCheckOut || null
+        details = { ...details, guests: s.accGuests, location: s.accLocation }
+      } else if (s.logisticsType === 'Fuel Request') {
+        details = { ...details, vehicle: s.fuelVehicle, quantity: s.fuelQty, purpose: s.fuelPurpose }
+      } else if (s.logisticsType === 'Travel Request') {
+        start_date = s.travelFrom || null
+        end_date = s.travelTo || null
+        details = { ...details, destination: s.travelDest, purpose: s.travelPurpose }
+      } else if (s.logisticsType === 'Event Support Request') {
+        start_date = s.eventDate || null
+        details = { ...details, eventName: s.eventName, participants: s.eventPax, requirements: s.eventReqs }
+      }
+      break
+
+    default:
+      break
   }
 
-  return { start_date, end_date, amount, details }
+  return { start_date, end_date, amount, details: Object.keys(details).length > 0 ? details : null }
 }
 
 export default function RequestsScreen({ route, navigation }: any) {
@@ -93,12 +229,112 @@ export default function RequestsScreen({ route, navigation }: any) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [orgProfiles, setOrgProfiles] = useState<Profile[]>([])
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
-  const [pettyCashProjectId, setPettyCashProjectId] = useState('')
+  const [projectId, setProjectId] = useState('')
   const [pettyCashPurpose, setPettyCashPurpose] = useState('')
   const [showProjectPicker, setShowProjectPicker] = useState(false)
+
+  // ── Finance fields ──
+  const [vendorName, setVendorName] = useState('')
+  const [vendorBank, setVendorBank] = useState('')
+  const [vendorAccNo, setVendorAccNo] = useState('')
+  const [vendorBranch, setVendorBranch] = useState('')
+  const [invoiceNo, setInvoiceNo] = useState('')
+  const [fromAccount, setFromAccount] = useState('')
+  const [toAccount, setToAccount] = useState('')
+  const [transferPurpose, setTransferPurpose] = useState('')
+  const [expDate, setExpDate] = useState('')
+  const [expCategory, setExpCategory] = useState('')
+  const [showExpCategoryPicker, setShowExpCategoryPicker] = useState(false)
+  const [receiptRef, setReceiptRef] = useState('')
+  const [auditType, setAuditType] = useState('')
+  const [showAuditTypePicker, setShowAuditTypePicker] = useState(false)
+  const [auditPeriodFrom, setAuditPeriodFrom] = useState('')
+  const [auditPeriodTo, setAuditPeriodTo] = useState('')
+  const [auditScope, setAuditScope] = useState('')
+  const [fundingTimeline, setFundingTimeline] = useState('')
+  const [fundingJustification, setFundingJustification] = useState('')
+
+  // ── HR fields ──
+  const [recruitPosition, setRecruitPosition] = useState('')
+  const [recruitDept, setRecruitDept] = useState('')
+  const [recruitVacancies, setRecruitVacancies] = useState('')
+  const [recruitQual, setRecruitQual] = useState('')
+  const [recruitDueDate, setRecruitDueDate] = useState('')
+  const [trainType, setTrainType] = useState('')
+  const [trainProvider, setTrainProvider] = useState('')
+  const [trainDuration, setTrainDuration] = useState('')
+  const [trainStaff, setTrainStaff] = useState('')
+  const [trainCost, setTrainCost] = useState('')
+  const [trainDate, setTrainDate] = useState('')
+  const [discEmployee, setDiscEmployee] = useState('')
+  const [showDiscEmployeePicker, setShowDiscEmployeePicker] = useState(false)
+  const [discIncidentDate, setDiscIncidentDate] = useState('')
+  const [discActionType, setDiscActionType] = useState('')
+  const [showDiscActionPicker, setShowDiscActionPicker] = useState(false)
+  const [discDesc, setDiscDesc] = useState('')
+  const [discWitnesses, setDiscWitnesses] = useState('')
+
+  // ── Procurement fields ──
+  const [contractVendor, setContractVendor] = useState('')
+  const [contractType, setContractType] = useState('')
+  const [showContractTypePicker, setShowContractTypePicker] = useState(false)
+  const [contractValue, setContractValue] = useState('')
+  const [contractDuration, setContractDuration] = useState('')
+  const [contractStartDate, setContractStartDate] = useState('')
+  const [contractTerms, setContractTerms] = useState('')
+  const [budgetCurrent, setBudgetCurrent] = useState('')
+  const [budgetRequested, setBudgetRequested] = useState('')
+  const [budgetJustify, setBudgetJustify] = useState('')
+  const [vendorSelItem, setVendorSelItem] = useState('')
+  const [vendorSelReqs, setVendorSelReqs] = useState('')
+  const [vendorSelDeadline, setVendorSelDeadline] = useState('')
+  const [procCost, setProcCost] = useState('')
+  const [supplierName, setSupplierName] = useState('')
+  const [supplierPeriodFrom, setSupplierPeriodFrom] = useState('')
+  const [supplierPeriodTo, setSupplierPeriodTo] = useState('')
+  const [supplierKPIs, setSupplierKPIs] = useState('')
+
+  // ── Audit Request fields ──
+  const [auditSubType, setAuditSubType] = useState('')
+  const [showAuditSubTypePicker, setShowAuditSubTypePicker] = useState(false)
+  const [complianceArea, setComplianceArea] = useState('')
+  const [complianceRegs, setComplianceRegs] = useState('')
+  const [reviewDepts, setReviewDepts] = useState('')
+  const [controlArea, setControlArea] = useState('')
+  const [riskArea, setRiskArea] = useState('')
+  const [riskLikelihood, setRiskLikelihood] = useState('Medium')
+  const [riskImpact, setRiskImpact] = useState('Medium')
+  const [riskMitigation, setRiskMitigation] = useState('')
+  const [fraudParties, setFraudParties] = useState('')
+  const [fraudEvidence, setFraudEvidence] = useState('')
+  const [fraudIncidentDate, setFraudIncidentDate] = useState('')
+
+  // ── Logistics fields ──
+  const [vehPassengers, setVehPassengers] = useState('')
+  const [vehDate, setVehDate] = useState('')
+  const [vehDest, setVehDest] = useState('')
+  const [vehPurpose, setVehPurpose] = useState('')
+  const [accCheckIn, setAccCheckIn] = useState('')
+  const [accCheckOut, setAccCheckOut] = useState('')
+  const [accGuests, setAccGuests] = useState('')
+  const [accLocation, setAccLocation] = useState('')
+  const [fuelVehicle, setFuelVehicle] = useState('')
+  const [fuelQty, setFuelQty] = useState('')
+  const [fuelPurpose, setFuelPurpose] = useState('')
+  const [travelFrom, setTravelFrom] = useState('')
+  const [travelTo, setTravelTo] = useState('')
+  const [travelDest, setTravelDest] = useState('')
+  const [travelPurpose, setTravelPurpose] = useState('')
+  const [eventName, setEventName] = useState('')
+  const [eventDate, setEventDate] = useState('')
+  const [eventPax, setEventPax] = useState('')
+  const [eventReqs, setEventReqs] = useState('')
+
+
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [requestType, setRequestType] = useState('General')
+  const [requestType, setRequestType] = useState('General Request')
+  const [logisticsType, setLogisticsType] = useState('')
   const [priority, setPriority] = useState('Medium')
   const [recipientId, setRecipientId] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -184,27 +420,102 @@ export default function RequestsScreen({ route, navigation }: any) {
   useFocusEffect(useCallback(() => { loadData() }, []))
 
   const resetForm = () => {
-    setTitle(''); setDescription(''); setRequestType('General')
+    setTitle(''); setDescription(''); setRequestType('General Request')
     setPriority('Medium'); setRecipientId(''); setShowRecipientPicker(false)
     setLeaveFrom(''); setLeaveTo(''); setAmount('')
-    setPettyCashProjectId(''); setPettyCashPurpose(''); setShowProjectPicker(false)
+    setProjectId(''); setPettyCashPurpose(''); setShowProjectPicker(false)
+    setLogisticsType('')
+    setVendorName(''); setVendorBank(''); setVendorAccNo(''); setVendorBranch(''); setInvoiceNo('')
+    setFromAccount(''); setToAccount(''); setTransferPurpose('')
+    setExpDate(''); setExpCategory(''); setReceiptRef('')
+    setAuditType(''); setAuditPeriodFrom(''); setAuditPeriodTo(''); setAuditScope('')
+    setFundingTimeline(''); setFundingJustification('')
+    setRecruitPosition(''); setRecruitDept(''); setRecruitVacancies(''); setRecruitQual(''); setRecruitDueDate('')
+    setTrainType(''); setTrainProvider(''); setTrainDuration(''); setTrainStaff(''); setTrainCost(''); setTrainDate('')
+    setDiscEmployee(''); setDiscIncidentDate(''); setDiscActionType(''); setDiscDesc(''); setDiscWitnesses('')
+    setContractVendor(''); setContractType(''); setContractValue(''); setContractDuration(''); setContractStartDate(''); setContractTerms('')
+    setBudgetCurrent(''); setBudgetRequested(''); setBudgetJustify('')
+    setVendorSelItem(''); setVendorSelReqs(''); setVendorSelDeadline(''); setProcCost('')
+    setSupplierName(''); setSupplierPeriodFrom(''); setSupplierPeriodTo(''); setSupplierKPIs('')
+    setAuditSubType(''); setComplianceArea(''); setComplianceRegs(''); setReviewDepts(''); setControlArea('')
+    setRiskArea(''); setRiskLikelihood('Medium'); setRiskImpact('Medium'); setRiskMitigation('')
+    setFraudParties(''); setFraudEvidence(''); setFraudIncidentDate('')
+    setVehPassengers(''); setVehDate(''); setVehDest(''); setVehPurpose('')
+    setAccCheckIn(''); setAccCheckOut(''); setAccGuests(''); setAccLocation('')
+    setFuelVehicle(''); setFuelQty(''); setFuelPurpose('')
+    setTravelFrom(''); setTravelTo(''); setTravelDest(''); setTravelPurpose('')
+    setEventName(''); setEventDate(''); setEventPax(''); setEventReqs('')
   }
 
   const submitRequest = async () => {
     if (!title.trim()) return Alert.alert('Required', 'Please enter a title')
     if (!description.trim()) return Alert.alert('Required', 'Please enter a description')
     if (!recipientId) return Alert.alert('Required', 'Please select a recipient')
-    if (requestType === 'Leave' && (!leaveFrom || !leaveTo)) {
+    if (requestType === 'Leave Request' && (!leaveFrom || !leaveTo)) {
       return Alert.alert('Required', 'Please enter both start and end dates')
     }
-    if (requestType === 'Petty Cash' && (!pettyCashProjectId || !pettyCashPurpose.trim())) {
+    
+    if (requestType === 'Petty Cash Request' && (!projectId || !pettyCashPurpose.trim())) {
       return Alert.alert('Required', 'Please select a project and enter a purpose')
     }
+    if (requestType === 'Vendor Payment Request' && !vendorName.trim()) {
+      return Alert.alert('Required', 'Please enter the vendor / payee name')
+    }
+    if (requestType === 'Project Funding Request' && !projectId) {
+      return Alert.alert('Required', 'Please select a project')
+    }
+    if (requestType === 'Recruitment Request' && !recruitPosition.trim()) {
+      return Alert.alert('Required', 'Please enter the position title')
+    }
+    if (requestType === 'Disciplinary Action Request' && (!discEmployee || !discActionType)) {
+      return Alert.alert('Required', 'Please select an employee and action type')
+    }
+    if (requestType === 'Contract Approval Request' && !contractVendor.trim()) {
+      return Alert.alert('Required', 'Please enter the vendor / contractor name')
+    }
+    if (requestType === 'Budget Increase Request' && !projectId) {
+      return Alert.alert('Required', 'Please select a project')
+    }
+    if (requestType === 'Vendor Selection Request' && !vendorSelItem.trim()) {
+      return Alert.alert('Required', 'Please describe the item / service required')
+    }
+    if (requestType === 'Supplier Performance Review Request' && !supplierName.trim()) {
+      return Alert.alert('Required', 'Please enter the supplier name')
+    }
+    if (requestType === 'Audit Request' && !auditSubType) {
+      return Alert.alert('Required', 'Please select an audit sub-type')
+    }
+    if (requestType === 'Logistics Request' && !logisticsType) {
+      return Alert.alert('Required', 'Please select a logistics type')
+    }
+
     try {
       setSubmitting(true)
       const { data: { user } } = await supabase.auth.getUser()
 
-      const extras = buildRequestExtras(requestType, { leaveFrom, leaveTo, amount, pettyCashProjectId, pettyCashPurpose })
+    const extras = buildRequestExtras(requestType, {
+        leaveFrom, leaveTo, amount, projectId, pettyCashPurpose,
+        vendorName, invoiceNo, vendorBank, vendorAccNo, vendorBranch,
+        fromAccount, toAccount, transferPurpose,
+        expDate, expCategory, receiptRef,
+        auditType, auditPeriodFrom, auditPeriodTo, auditScope,
+        fundingTimeline, fundingJustification,
+        recruitPosition, recruitDept, recruitVacancies, recruitQual, recruitDueDate,
+        trainType, trainProvider, trainDuration, trainStaff, trainCost, trainDate,
+       discEmployee, discIncidentDate, discActionType, discDesc, discWitnesses,
+        contractVendor, contractType, contractValue, contractDuration, contractStartDate, contractTerms,
+        budgetCurrent, budgetRequested, budgetJustify,
+        vendorSelItem, vendorSelReqs, vendorSelDeadline, procCost,
+        supplierName, supplierPeriodFrom, supplierPeriodTo, supplierKPIs,
+        auditSubType, complianceArea, complianceRegs, reviewDepts, controlArea,
+        riskArea, riskLikelihood, riskImpact, riskMitigation,
+        fraudParties, fraudEvidence, fraudIncidentDate,
+        logisticsType, vehPassengers, vehDate, vehDest, vehPurpose,
+        accCheckIn, accCheckOut, accGuests, accLocation,
+        fuelVehicle, fuelQty, fuelPurpose,
+        travelFrom, travelTo, travelDest, travelPurpose,
+        eventName, eventDate, eventPax, eventReqs,
+      })
 
       const { data: newRequest, error } = await supabase
         .from('requests')
@@ -820,14 +1131,14 @@ export default function RequestsScreen({ route, navigation }: any) {
                 )}
 
                 <View style={styles.typeRow}>
-                  {['General', 'Leave', 'Petty Cash', 'Material'].map(t => (
-                    <TouchableOpacity key={t} style={[styles.typeBtn, requestType === t && styles.typeBtnActive]} onPress={() => { setRequestType(t); setRecipientId('') }}>
+                  {(requestOptions[profile?.role_name ?? ''] ?? requestOptions.default).map(t => (
+                    <TouchableOpacity key={t} style={[styles.typeBtn, requestType === t && styles.typeBtnActive]} onPress={() => { setRequestType(t); setRecipientId(''); setLogisticsType('') }}>
                       <Text style={[styles.typeBtnText, requestType === t && styles.typeBtnTextActive]}>{t}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
 
-                {requestType === 'Leave' && (
+                {requestType === 'Leave Request' && (
                   <>
                     <Text style={styles.label}>Start Date</Text>
                     <TextInput
@@ -848,13 +1159,13 @@ export default function RequestsScreen({ route, navigation }: any) {
                   </>
                 )}
 
-                {requestType === 'Petty Cash' && (
+                {requestType === 'Petty Cash Request' && (
                   <>
                     <Text style={styles.label}>Project</Text>
                     <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
-                      <Text style={pettyCashProjectId ? styles.recipientSelected : styles.recipientPlaceholder}>
-                        {pettyCashProjectId
-                          ? projects.find(p => p.id === pettyCashProjectId)?.name
+                      <Text style={projectId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {projectId
+                          ? projects.find(p => p.id === projectId)?.name
                           : 'Select project...'}
                       </Text>
                       <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
@@ -864,10 +1175,10 @@ export default function RequestsScreen({ route, navigation }: any) {
                         {projects.map(p => (
                           <TouchableOpacity
                             key={p.id}
-                            style={[styles.recipientOption, pettyCashProjectId === p.id && styles.recipientOptionActive]}
-                            onPress={() => { setPettyCashProjectId(p.id); setShowProjectPicker(false) }}
+                            style={[styles.recipientOption, projectId === p.id && styles.recipientOptionActive]}
+                            onPress={() => { setProjectId(p.id); setShowProjectPicker(false) }}
                           >
-                            <Text style={[styles.recipientOptionText, pettyCashProjectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
+                            <Text style={[styles.recipientOptionText, projectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
                           </TouchableOpacity>
                         ))}
                       </View>
@@ -919,6 +1230,623 @@ export default function RequestsScreen({ route, navigation }: any) {
           </KeyboardAvoidingView>
         </View>
       )}
+      {requestType === 'Vendor Payment Request' && (
+                  <>
+                    <Text style={styles.label}>Vendor / Payee Name *</Text>
+                    <TextInput style={styles.input} placeholder="Vendor or company name" placeholderTextColor="#4a7a54" value={vendorName} onChangeText={setVendorName} />
+
+                    <Text style={styles.label}>Invoice Number</Text>
+                    <TextInput style={styles.input} placeholder="INV-001" placeholderTextColor="#4a7a54" value={invoiceNo} onChangeText={setInvoiceNo} />
+
+                    <Text style={styles.label}>Amount (GHS) *</Text>
+                    <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a7a54" value={amount} onChangeText={setAmount} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Related Project</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
+                      <Text style={projectId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {projectId ? projects.find(p => p.id === projectId)?.name : 'Select project...'}
+                      </Text>
+                      <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showProjectPicker && (
+                      <View style={styles.recipientDropdown}>
+                        {projects.map(p => (
+                          <TouchableOpacity key={p.id} style={[styles.recipientOption, projectId === p.id && styles.recipientOptionActive]} onPress={() => { setProjectId(p.id); setShowProjectPicker(false) }}>
+                            <Text style={[styles.recipientOptionText, projectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Bank Name</Text>
+                    <TextInput style={styles.input} placeholder="e.g. GCB Bank" placeholderTextColor="#4a7a54" value={vendorBank} onChangeText={setVendorBank} />
+
+                    <Text style={styles.label}>Account Number</Text>
+                    <TextInput style={styles.input} placeholder="Account number" placeholderTextColor="#4a7a54" value={vendorAccNo} onChangeText={setVendorAccNo} />
+
+                    <Text style={styles.label}>Branch</Text>
+                    <TextInput style={styles.input} placeholder="Branch name" placeholderTextColor="#4a7a54" value={vendorBranch} onChangeText={setVendorBranch} />
+                  </>
+                )}
+
+                {requestType === 'Fund Transfer Request' && (
+                  <>
+                    <Text style={styles.label}>From Account</Text>
+                    <TextInput style={styles.input} placeholder="Source account" placeholderTextColor="#4a7a54" value={fromAccount} onChangeText={setFromAccount} />
+
+                    <Text style={styles.label}>To Account</Text>
+                    <TextInput style={styles.input} placeholder="Destination account" placeholderTextColor="#4a7a54" value={toAccount} onChangeText={setToAccount} />
+
+                    <Text style={styles.label}>Amount (GHS) *</Text>
+                    <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a7a54" value={amount} onChangeText={setAmount} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Related Project</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
+                      <Text style={projectId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {projectId ? projects.find(p => p.id === projectId)?.name : 'Select project...'}
+                      </Text>
+                      <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showProjectPicker && (
+                      <View style={styles.recipientDropdown}>
+                        {projects.map(p => (
+                          <TouchableOpacity key={p.id} style={[styles.recipientOption, projectId === p.id && styles.recipientOptionActive]} onPress={() => { setProjectId(p.id); setShowProjectPicker(false) }}>
+                            <Text style={[styles.recipientOptionText, projectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Purpose of Transfer</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="Explain the reason for this transfer..." placeholderTextColor="#4a7a54" value={transferPurpose} onChangeText={setTransferPurpose} multiline numberOfLines={3} textAlignVertical="top" />
+                  </>
+                )}
+
+                {requestType === 'Expense Reimbursement Request' && (
+                  <>
+                    <Text style={styles.label}>Expense Date</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={expDate} onChangeText={setExpDate} />
+
+                    <Text style={styles.label}>Category</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowExpCategoryPicker(!showExpCategoryPicker)}>
+                      <Text style={expCategory ? styles.recipientSelected : styles.recipientPlaceholder}>{expCategory || 'Select category...'}</Text>
+                      <Text style={styles.chevron}>{showExpCategoryPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showExpCategoryPicker && (
+                      <View style={styles.recipientDropdown}>
+                        {EXPENSE_CATEGORIES.map(c => (
+                          <TouchableOpacity key={c} style={[styles.recipientOption, expCategory === c && styles.recipientOptionActive]} onPress={() => { setExpCategory(c); setShowExpCategoryPicker(false) }}>
+                            <Text style={[styles.recipientOptionText, expCategory === c && { color: '#0d2818' }]}>{c}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Amount (GHS) *</Text>
+                    <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a7a54" value={amount} onChangeText={setAmount} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Receipt / Reference No.</Text>
+                    <TextInput style={styles.input} placeholder="Receipt or reference" placeholderTextColor="#4a7a54" value={receiptRef} onChangeText={setReceiptRef} />
+                  </>
+                )}
+
+                {requestType === 'Internal Audit Request' && (
+                  <>
+                    <Text style={styles.label}>Audit Type</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowAuditTypePicker(!showAuditTypePicker)}>
+                      <Text style={auditType ? styles.recipientSelected : styles.recipientPlaceholder}>{auditType || 'Select audit type...'}</Text>
+                      <Text style={styles.chevron}>{showAuditTypePicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showAuditTypePicker && (
+                      <View style={styles.recipientDropdown}>
+                        {AUDIT_TYPES.map(a => (
+                          <TouchableOpacity key={a} style={[styles.recipientOption, auditType === a && styles.recipientOptionActive]} onPress={() => { setAuditType(a); setShowAuditTypePicker(false) }}>
+                            <Text style={[styles.recipientOptionText, auditType === a && { color: '#0d2818' }]}>{a}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Related Project</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
+                      <Text style={projectId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {projectId ? projects.find(p => p.id === projectId)?.name : 'Select project...'}
+                      </Text>
+                      <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showProjectPicker && (
+                      <View style={styles.recipientDropdown}>
+                        {projects.map(p => (
+                          <TouchableOpacity key={p.id} style={[styles.recipientOption, projectId === p.id && styles.recipientOptionActive]} onPress={() => { setProjectId(p.id); setShowProjectPicker(false) }}>
+                            <Text style={[styles.recipientOptionText, projectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Period From</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={auditPeriodFrom} onChangeText={setAuditPeriodFrom} />
+
+                    <Text style={styles.label}>Period To</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={auditPeriodTo} onChangeText={setAuditPeriodTo} />
+
+                    <Text style={styles.label}>Scope / Departments to Audit</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="Describe the scope and departments..." placeholderTextColor="#4a7a54" value={auditScope} onChangeText={setAuditScope} multiline numberOfLines={3} textAlignVertical="top" />
+                  </>
+                )}
+
+                {requestType === 'Project Funding Request' && (
+                  <>
+                    <Text style={styles.label}>Project *</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
+                      <Text style={projectId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {projectId ? projects.find(p => p.id === projectId)?.name : 'Select project...'}
+                      </Text>
+                      <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showProjectPicker && (
+                      <View style={styles.recipientDropdown}>
+                        {projects.map(p => (
+                          <TouchableOpacity key={p.id} style={[styles.recipientOption, projectId === p.id && styles.recipientOptionActive]} onPress={() => { setProjectId(p.id); setShowProjectPicker(false) }}>
+                            <Text style={[styles.recipientOptionText, projectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Amount Requested (GHS)</Text>
+                    <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a7a54" value={amount} onChangeText={setAmount} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Funding Timeline</Text>
+                    <TextInput style={styles.input} placeholder="e.g. Within 2 weeks" placeholderTextColor="#4a7a54" value={fundingTimeline} onChangeText={setFundingTimeline} />
+
+                    <Text style={styles.label}>Justification</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="Explain why the funding is needed..." placeholderTextColor="#4a7a54" value={fundingJustification} onChangeText={setFundingJustification} multiline numberOfLines={3} textAlignVertical="top" />
+                  </>
+                )}
+
+                {requestType === 'Recruitment Request' && (
+                  <>
+                    <Text style={styles.label}>Position Title *</Text>
+                    <TextInput style={styles.input} placeholder="e.g. Senior Site Engineer" placeholderTextColor="#4a7a54" value={recruitPosition} onChangeText={setRecruitPosition} />
+
+                    <Text style={styles.label}>Department</Text>
+                    <TextInput style={styles.input} placeholder="e.g. Construction" placeholderTextColor="#4a7a54" value={recruitDept} onChangeText={setRecruitDept} />
+
+                    <Text style={styles.label}>Number of Vacancies</Text>
+                    <TextInput style={styles.input} placeholder="1" placeholderTextColor="#4a7a54" value={recruitVacancies} onChangeText={setRecruitVacancies} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Required By (Date)</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={recruitDueDate} onChangeText={setRecruitDueDate} />
+
+                    <Text style={styles.label}>Minimum Qualifications / Requirements</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="e.g. BSc Civil Engineering, 5 years experience..." placeholderTextColor="#4a7a54" value={recruitQual} onChangeText={setRecruitQual} multiline numberOfLines={3} textAlignVertical="top" />
+                  </>
+                )}
+
+                {requestType === 'Training Request' && (
+                  <>
+                    <Text style={styles.label}>Training Type / Programme</Text>
+                    <TextInput style={styles.input} placeholder="e.g. Health & Safety" placeholderTextColor="#4a7a54" value={trainType} onChangeText={setTrainType} />
+
+                    <Text style={styles.label}>Training Provider</Text>
+                    <TextInput style={styles.input} placeholder="Provider name" placeholderTextColor="#4a7a54" value={trainProvider} onChangeText={setTrainProvider} />
+
+                    <Text style={styles.label}>Duration</Text>
+                    <TextInput style={styles.input} placeholder="e.g. 3 days" placeholderTextColor="#4a7a54" value={trainDuration} onChangeText={setTrainDuration} />
+
+                    <Text style={styles.label}>Training Date</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={trainDate} onChangeText={setTrainDate} />
+
+                    <Text style={styles.label}>Number of Staff</Text>
+                    <TextInput style={styles.input} placeholder="0" placeholderTextColor="#4a7a54" value={trainStaff} onChangeText={setTrainStaff} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Estimated Cost (GHS)</Text>
+                    <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a7a54" value={trainCost} onChangeText={setTrainCost} keyboardType="numeric" />
+                  </>
+                )}
+
+                {requestType === 'Disciplinary Action Request' && (
+                  <>
+                    <Text style={styles.label}>Employee *</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowDiscEmployeePicker(!showDiscEmployeePicker)}>
+                      <Text style={discEmployee ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {discEmployee ? orgProfiles.find(p => p.id === discEmployee)?.full_name : 'Select employee...'}
+                      </Text>
+                      <Text style={styles.chevron}>{showDiscEmployeePicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showDiscEmployeePicker && (
+                      <View style={styles.recipientDropdown}>
+                        {orgProfiles.map(p => (
+                          <TouchableOpacity key={p.id} style={[styles.recipientOption, discEmployee === p.id && styles.recipientOptionActive]} onPress={() => { setDiscEmployee(p.id); setShowDiscEmployeePicker(false) }}>
+                            <Text style={[styles.recipientOptionText, discEmployee === p.id && { color: '#0d2818' }]}>{p.full_name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Incident Date</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={discIncidentDate} onChangeText={setDiscIncidentDate} />
+
+                    <Text style={styles.label}>Action Type *</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowDiscActionPicker(!showDiscActionPicker)}>
+                      <Text style={discActionType ? styles.recipientSelected : styles.recipientPlaceholder}>{discActionType || 'Select action type...'}</Text>
+                      <Text style={styles.chevron}>{showDiscActionPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showDiscActionPicker && (
+                      <View style={styles.recipientDropdown}>
+                        {DISCIPLINARY_ACTIONS.map(a => (
+                          <TouchableOpacity key={a} style={[styles.recipientOption, discActionType === a && styles.recipientOptionActive]} onPress={() => { setDiscActionType(a); setShowDiscActionPicker(false) }}>
+                            <Text style={[styles.recipientOptionText, discActionType === a && { color: '#0d2818' }]}>{a}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Witnesses (if any)</Text>
+                    <TextInput style={styles.input} placeholder="Names of witnesses" placeholderTextColor="#4a7a54" value={discWitnesses} onChangeText={setDiscWitnesses} />
+
+                    <Text style={styles.label}>Incident Description</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="Describe the incident or misconduct in detail..." placeholderTextColor="#4a7a54" value={discDesc} onChangeText={setDiscDesc} multiline numberOfLines={4} textAlignVertical="top" />
+                  </>
+                )}
+
+                {requestType === 'Contract Approval Request' && (
+                  <>
+                    <Text style={styles.label}>Vendor / Contractor *</Text>
+                    <TextInput style={styles.input} placeholder="Vendor name" placeholderTextColor="#4a7a54" value={contractVendor} onChangeText={setContractVendor} />
+
+                    <Text style={styles.label}>Contract Type</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowContractTypePicker(!showContractTypePicker)}>
+                      <Text style={contractType ? styles.recipientSelected : styles.recipientPlaceholder}>{contractType || 'Select contract type...'}</Text>
+                      <Text style={styles.chevron}>{showContractTypePicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showContractTypePicker && (
+                      <View style={styles.recipientDropdown}>
+                        {CONTRACT_TYPES.map(c => (
+                          <TouchableOpacity key={c} style={[styles.recipientOption, contractType === c && styles.recipientOptionActive]} onPress={() => { setContractType(c); setShowContractTypePicker(false) }}>
+                            <Text style={[styles.recipientOptionText, contractType === c && { color: '#0d2818' }]}>{c}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Contract Value (GHS)</Text>
+                    <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a7a54" value={contractValue} onChangeText={setContractValue} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Contract Duration</Text>
+                    <TextInput style={styles.input} placeholder="e.g. 12 months" placeholderTextColor="#4a7a54" value={contractDuration} onChangeText={setContractDuration} />
+
+                    <Text style={styles.label}>Start Date</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={contractStartDate} onChangeText={setContractStartDate} />
+
+                    <Text style={styles.label}>Related Project</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
+                      <Text style={projectId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {projectId ? projects.find(p => p.id === projectId)?.name : 'Select project...'}
+                      </Text>
+                      <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showProjectPicker && (
+                      <View style={styles.recipientDropdown}>
+                        {projects.map(p => (
+                          <TouchableOpacity key={p.id} style={[styles.recipientOption, projectId === p.id && styles.recipientOptionActive]} onPress={() => { setProjectId(p.id); setShowProjectPicker(false) }}>
+                            <Text style={[styles.recipientOptionText, projectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Key Terms & Conditions</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="Summarise key obligations, deliverables and payment terms..." placeholderTextColor="#4a7a54" value={contractTerms} onChangeText={setContractTerms} multiline numberOfLines={3} textAlignVertical="top" />
+                  </>
+                )}
+
+                {requestType === 'Budget Increase Request' && (
+                  <>
+                    <Text style={styles.label}>Project *</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
+                      <Text style={projectId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {projectId ? projects.find(p => p.id === projectId)?.name : 'Select project...'}
+                      </Text>
+                      <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showProjectPicker && (
+                      <View style={styles.recipientDropdown}>
+                        {projects.map(p => (
+                          <TouchableOpacity key={p.id} style={[styles.recipientOption, projectId === p.id && styles.recipientOptionActive]} onPress={() => { setProjectId(p.id); setShowProjectPicker(false) }}>
+                            <Text style={[styles.recipientOptionText, projectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Current Budget (GHS)</Text>
+                    <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a7a54" value={budgetCurrent} onChangeText={setBudgetCurrent} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Requested Increase (GHS)</Text>
+                    <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a7a54" value={budgetRequested} onChangeText={setBudgetRequested} keyboardType="numeric" />
+
+                    {!!budgetCurrent && !!budgetRequested && (
+                      <View style={{ backgroundColor: '#c9a84c22', borderWidth: 1, borderColor: '#c9a84c44', borderRadius: 10, padding: 12, marginBottom: 16, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 11, color: '#8a9e8d' }}>New Total</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#c9a84c' }}>
+                          GHS {(Number(budgetCurrent) + Number(budgetRequested)).toLocaleString()}
+                        </Text>
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Justification for Increase</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="Explain why the additional budget is needed..." placeholderTextColor="#4a7a54" value={budgetJustify} onChangeText={setBudgetJustify} multiline numberOfLines={3} textAlignVertical="top" />
+                  </>
+                )}
+
+                {requestType === 'Vendor Selection Request' && (
+                  <>
+                    <Text style={styles.label}>Item / Service Required *</Text>
+                    <TextInput style={styles.input} placeholder="Describe what's needed" placeholderTextColor="#4a7a54" value={vendorSelItem} onChangeText={setVendorSelItem} />
+
+                    <Text style={styles.label}>Selection Deadline</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={vendorSelDeadline} onChangeText={setVendorSelDeadline} />
+
+                    <Text style={styles.label}>Related Project</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
+                      <Text style={projectId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {projectId ? projects.find(p => p.id === projectId)?.name : 'Select project...'}
+                      </Text>
+                      <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showProjectPicker && (
+                      <View style={styles.recipientDropdown}>
+                        {projects.map(p => (
+                          <TouchableOpacity key={p.id} style={[styles.recipientOption, projectId === p.id && styles.recipientOptionActive]} onPress={() => { setProjectId(p.id); setShowProjectPicker(false) }}>
+                            <Text style={[styles.recipientOptionText, projectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Estimated Budget (GHS)</Text>
+                    <TextInput style={styles.input} placeholder="0.00" placeholderTextColor="#4a7a54" value={procCost} onChangeText={setProcCost} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Requirements & Evaluation Criteria</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="List vendor requirements and evaluation criteria..." placeholderTextColor="#4a7a54" value={vendorSelReqs} onChangeText={setVendorSelReqs} multiline numberOfLines={3} textAlignVertical="top" />
+                  </>
+                )}
+
+                {requestType === 'Supplier Performance Review Request' && (
+                  <>
+                    <Text style={styles.label}>Supplier Name *</Text>
+                    <TextInput style={styles.input} placeholder="Supplier or vendor name" placeholderTextColor="#4a7a54" value={supplierName} onChangeText={setSupplierName} />
+
+                    <Text style={styles.label}>Related Project</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
+                      <Text style={projectId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {projectId ? projects.find(p => p.id === projectId)?.name : 'Select project...'}
+                      </Text>
+                      <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showProjectPicker && (
+                      <View style={styles.recipientDropdown}>
+                        {projects.map(p => (
+                          <TouchableOpacity key={p.id} style={[styles.recipientOption, projectId === p.id && styles.recipientOptionActive]} onPress={() => { setProjectId(p.id); setShowProjectPicker(false) }}>
+                            <Text style={[styles.recipientOptionText, projectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Review Period From</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={supplierPeriodFrom} onChangeText={setSupplierPeriodFrom} />
+
+                    <Text style={styles.label}>Review Period To</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={supplierPeriodTo} onChangeText={setSupplierPeriodTo} />
+
+                    <Text style={styles.label}>KPIs to Review</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="e.g. Delivery time, Quality, Pricing, Communication..." placeholderTextColor="#4a7a54" value={supplierKPIs} onChangeText={setSupplierKPIs} multiline numberOfLines={3} textAlignVertical="top" />
+                  </>
+                )}
+
+                {requestType === 'Audit Request' && (
+                  <>
+                    <Text style={styles.label}>Audit Sub-Type *</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowAuditSubTypePicker(!showAuditSubTypePicker)}>
+                      <Text style={auditSubType ? styles.recipientSelected : styles.recipientPlaceholder}>{auditSubType || 'Select sub-type...'}</Text>
+                      <Text style={styles.chevron}>{showAuditSubTypePicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showAuditSubTypePicker && (
+                      <View style={styles.recipientDropdown}>
+                        {AUDIT_TYPES.map(a => (
+                          <TouchableOpacity key={a} style={[styles.recipientOption, auditSubType === a && styles.recipientOptionActive]} onPress={() => { setAuditSubType(a); setShowAuditSubTypePicker(false) }}>
+                            <Text style={[styles.recipientOptionText, auditSubType === a && { color: '#0d2818' }]}>{a}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Related Project</Text>
+                    <TouchableOpacity style={styles.recipientPicker} onPress={() => setShowProjectPicker(!showProjectPicker)}>
+                      <Text style={projectId ? styles.recipientSelected : styles.recipientPlaceholder}>
+                        {projectId ? projects.find(p => p.id === projectId)?.name : 'Select project...'}
+                      </Text>
+                      <Text style={styles.chevron}>{showProjectPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showProjectPicker && (
+                      <View style={styles.recipientDropdown}>
+                        {projects.map(p => (
+                          <TouchableOpacity key={p.id} style={[styles.recipientOption, projectId === p.id && styles.recipientOptionActive]} onPress={() => { setProjectId(p.id); setShowProjectPicker(false) }}>
+                            <Text style={[styles.recipientOptionText, projectId === p.id && { color: '#0d2818' }]}>{p.name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    <Text style={styles.label}>Period From</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={auditPeriodFrom} onChangeText={setAuditPeriodFrom} />
+
+                    <Text style={styles.label}>Period To</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={auditPeriodTo} onChangeText={setAuditPeriodTo} />
+
+                    <Text style={styles.label}>Scope / Departments</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="Describe the objectives and scope..." placeholderTextColor="#4a7a54" value={auditScope} onChangeText={setAuditScope} multiline numberOfLines={3} textAlignVertical="top" />
+
+                    {(auditSubType === 'Compliance Review' || auditSubType === 'Regulatory Compliance Request') && (
+                      <>
+                        <Text style={styles.label}>Compliance Area / Topic</Text>
+                        <TextInput style={styles.input} placeholder="e.g. Health & Safety, Financial Reporting" placeholderTextColor="#4a7a54" value={complianceArea} onChangeText={setComplianceArea} />
+
+                        <Text style={styles.label}>Applicable Regulations</Text>
+                        <TextInput style={styles.input} placeholder="e.g. OSHA, IFRS, Company Policy" placeholderTextColor="#4a7a54" value={complianceRegs} onChangeText={setComplianceRegs} />
+                      </>
+                    )}
+
+                    {(auditSubType === 'Financial Review' || auditSubType === 'Operational Review') && (
+                      <>
+                        <Text style={styles.label}>Departments / Accounts in Scope</Text>
+                        <TextInput style={styles.input} placeholder="e.g. Finance, Procurement, Operations" placeholderTextColor="#4a7a54" value={reviewDepts} onChangeText={setReviewDepts} />
+                      </>
+                    )}
+
+                    {auditSubType === 'Internal Control Evaluation' && (
+                      <>
+                        <Text style={styles.label}>Control Area</Text>
+                        <TextInput style={styles.input} placeholder="e.g. Procurement controls" placeholderTextColor="#4a7a54" value={controlArea} onChangeText={setControlArea} />
+                      </>
+                    )}
+
+                    {auditSubType === 'Risk Assessment' && (
+                      <>
+                        <Text style={styles.label}>Risk Area / Domain</Text>
+                        <TextInput style={styles.input} placeholder="e.g. Financial, Operational, Compliance" placeholderTextColor="#4a7a54" value={riskArea} onChangeText={setRiskArea} />
+
+                        <Text style={styles.label}>Likelihood</Text>
+                        <View style={styles.typeRow}>
+                          {RISK_LEVELS.map(l => (
+                            <TouchableOpacity key={l} style={[styles.typeBtn, riskLikelihood === l && styles.typeBtnActive]} onPress={() => setRiskLikelihood(l)}>
+                              <Text style={[styles.typeBtnText, riskLikelihood === l && styles.typeBtnTextActive]}>{l}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+
+                        <Text style={styles.label}>Potential Impact</Text>
+                        <View style={styles.typeRow}>
+                          {RISK_LEVELS.map(l => (
+                            <TouchableOpacity key={l} style={[styles.typeBtn, riskImpact === l && styles.typeBtnActive]} onPress={() => setRiskImpact(l)}>
+                              <Text style={[styles.typeBtnText, riskImpact === l && styles.typeBtnTextActive]}>{l}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+
+                        <Text style={styles.label}>Proposed Mitigation Measures</Text>
+                        <TextInput style={[styles.input, styles.textarea]} placeholder="Describe recommended mitigation actions..." placeholderTextColor="#4a7a54" value={riskMitigation} onChangeText={setRiskMitigation} multiline numberOfLines={3} textAlignVertical="top" />
+                      </>
+                    )}
+
+                    {auditSubType === 'Fraud Investigation' && (
+                      <>
+                        <Text style={styles.label}>Incident Date</Text>
+                        <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={fraudIncidentDate} onChangeText={setFraudIncidentDate} />
+
+                        <Text style={styles.label}>Parties Involved</Text>
+                        <TextInput style={styles.input} placeholder="Names or departments involved" placeholderTextColor="#4a7a54" value={fraudParties} onChangeText={setFraudParties} />
+
+                        <Text style={styles.label}>Evidence Reference</Text>
+                        <TextInput style={styles.input} placeholder="Document/file reference numbers" placeholderTextColor="#4a7a54" value={fraudEvidence} onChangeText={setFraudEvidence} />
+                      </>
+                    )}
+                  </>
+                )}
+
+                {requestType === 'Logistics Request' && (
+                  <>
+                    <Text style={styles.label}>Logistics Type *</Text>
+                    <View style={styles.typeRow}>
+                      {LOGISTICS_TYPES.map(l => (
+                        <TouchableOpacity key={l} style={[styles.typeBtn, logisticsType === l && styles.typeBtnActive]} onPress={() => setLogisticsType(l)}>
+                          <Text style={[styles.typeBtnText, logisticsType === l && styles.typeBtnTextActive]}>{l}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                {logisticsType === 'Vehicle Request' && (
+                  <>
+                    <Text style={styles.label}>No. of Passengers</Text>
+                    <TextInput style={styles.input} placeholder="0" placeholderTextColor="#4a7a54" value={vehPassengers} onChangeText={setVehPassengers} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Date Needed</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={vehDate} onChangeText={setVehDate} />
+
+                    <Text style={styles.label}>Destination</Text>
+                    <TextInput style={styles.input} placeholder="e.g. Cape Coast, Ghana" placeholderTextColor="#4a7a54" value={vehDest} onChangeText={setVehDest} />
+
+                    <Text style={styles.label}>Purpose of Travel</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="Describe the purpose..." placeholderTextColor="#4a7a54" value={vehPurpose} onChangeText={setVehPurpose} multiline numberOfLines={3} textAlignVertical="top" />
+                  </>
+                )}
+
+                {logisticsType === 'Accommodation Request' && (
+                  <>
+                    <Text style={styles.label}>Check-in Date</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={accCheckIn} onChangeText={setAccCheckIn} />
+
+                    <Text style={styles.label}>Check-out Date</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={accCheckOut} onChangeText={setAccCheckOut} />
+
+                    <Text style={styles.label}>Number of Guests</Text>
+                    <TextInput style={styles.input} placeholder="0" placeholderTextColor="#4a7a54" value={accGuests} onChangeText={setAccGuests} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Location</Text>
+                    <TextInput style={styles.input} placeholder="e.g. Accra" placeholderTextColor="#4a7a54" value={accLocation} onChangeText={setAccLocation} />
+                  </>
+                )}
+
+                {logisticsType === 'Fuel Request' && (
+                  <>
+                    <Text style={styles.label}>Vehicle Registration</Text>
+                    <TextInput style={styles.input} placeholder="e.g. GR-1234-24" placeholderTextColor="#4a7a54" value={fuelVehicle} onChangeText={setFuelVehicle} />
+
+                    <Text style={styles.label}>Estimated Quantity (Litres)</Text>
+                    <TextInput style={styles.input} placeholder="0" placeholderTextColor="#4a7a54" value={fuelQty} onChangeText={setFuelQty} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Purpose</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="Purpose of fuel request..." placeholderTextColor="#4a7a54" value={fuelPurpose} onChangeText={setFuelPurpose} multiline numberOfLines={3} textAlignVertical="top" />
+                  </>
+                )}
+
+                {logisticsType === 'Travel Request' && (
+                  <>
+                    <Text style={styles.label}>Departure Date</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={travelFrom} onChangeText={setTravelFrom} />
+
+                    <Text style={styles.label}>Return Date</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={travelTo} onChangeText={setTravelTo} />
+
+                    <Text style={styles.label}>Destination</Text>
+                    <TextInput style={styles.input} placeholder="e.g. Kumasi, Ghana" placeholderTextColor="#4a7a54" value={travelDest} onChangeText={setTravelDest} />
+
+                    <Text style={styles.label}>Travel Purpose</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="Purpose of travel..." placeholderTextColor="#4a7a54" value={travelPurpose} onChangeText={setTravelPurpose} multiline numberOfLines={3} textAlignVertical="top" />
+                  </>
+                )}
+
+                {logisticsType === 'Event Support Request' && (
+                  <>
+                    <Text style={styles.label}>Event Name</Text>
+                    <TextInput style={styles.input} placeholder="Event name" placeholderTextColor="#4a7a54" value={eventName} onChangeText={setEventName} />
+
+                    <Text style={styles.label}>Event Date</Text>
+                    <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor="#4a7a54" value={eventDate} onChangeText={setEventDate} />
+
+                    <Text style={styles.label}>Expected Participants</Text>
+                    <TextInput style={styles.input} placeholder="0" placeholderTextColor="#4a7a54" value={eventPax} onChangeText={setEventPax} keyboardType="numeric" />
+
+                    <Text style={styles.label}>Logistics Requirements</Text>
+                    <TextInput style={[styles.input, styles.textarea]} placeholder="What is needed for the event..." placeholderTextColor="#4a7a54" value={eventReqs} onChangeText={setEventReqs} multiline numberOfLines={3} textAlignVertical="top" />
+                  </>
+                )}
+
     </SafeAreaView>
   )
 }
