@@ -18,6 +18,13 @@ const Tab = createBottomTabNavigator()
 
 // Roles allowed to see the Project Analytics quick action
 const ANALYTICS_ROLES = ['CEO', 'Admin', 'Finance Director']
+// Roles allowed to see the Petty Cash quick action
+const PETTY_CASH_ROLES = ['Accountant']
+const PROCESS_PAYMENT_ROLES = ['Accountant']
+const ADMIN_PETTY_CASH_ROLES = ['CEO']
+const AWARD_VENDOR_ROLES = ['Procurement Manager']
+const APPROVE_PAYMENT_ROLES = ['CEO', 'Finance Director']
+const USER_MANAGEMENT_ROLES = ['CEO']
 
 function DashboardTab({ profile, navigation }: { profile: any; navigation: any }) {
   const [stats, setStats] = useState({ projects: 0, requests: 0, notifications: 0 })
@@ -40,6 +47,12 @@ function DashboardTab({ profile, navigation }: { profile: any; navigation: any }
 }, [profile]))
 
   const canViewAnalytics = ANALYTICS_ROLES.includes(profile?.role_name)
+  const canViewPettyCash = PETTY_CASH_ROLES.includes(profile?.role_name)
+  const canProcessPayment = PROCESS_PAYMENT_ROLES.includes(profile?.role_name)
+  const canViewAdminPettyCash = ADMIN_PETTY_CASH_ROLES.includes(profile?.role_name)
+  const canAwardVendor = AWARD_VENDOR_ROLES.includes(profile?.role_name)
+  const canApprovePayment = APPROVE_PAYMENT_ROLES.includes(profile?.role_name)
+  const canManageUsers = USER_MANAGEMENT_ROLES.includes(profile?.role_name)
 
   // tab: true items live inside this Tab.Navigator → navigation.navigate()
   // tab: false items are root-stack screens (outside the tab bar) → navigation.getParent()?.navigate()
@@ -51,6 +64,24 @@ function DashboardTab({ profile, navigation }: { profile: any; navigation: any }
     { label: 'Profile',       icon: '👤', target: 'Profile',     isStack: false },
     ...(canViewAnalytics
       ? [{ label: 'Project Analytics', icon: '📊', target: 'ProjectAnalytics', isStack: true }]
+      : []),
+    ...(canViewPettyCash
+      ? [{ label: 'Petty Cash', icon: '💰', target: 'PettyCash', isStack: true }]
+      : []),
+       ...(canProcessPayment
+      ? [{ label: 'Process Payment', icon: '💳', target: 'ProcessPayment', isStack: true }]
+      : []),
+       ...(canViewAdminPettyCash
+      ? [{ label: 'Admin Petty Cash', icon: '🏦', target: 'AdminPettyCash', isStack: true }]
+      : []),
+       ...(canAwardVendor
+      ? [{ label: 'Award Vendor', icon: '🏆', target: 'AwardVendor', isStack: true }]
+      : []),
+      ...(canApprovePayment
+      ? [{ label: 'Payment Approvals', icon: '📝', target: 'ApprovePaymentRequest', isStack: true }]
+      : []),
+       ...(canManageUsers
+      ? [{ label: 'User Management', icon: '👥', target: 'UserManagement', isStack: true }]
       : []),
   ]
 

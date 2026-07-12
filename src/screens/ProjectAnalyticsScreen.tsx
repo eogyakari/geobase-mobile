@@ -62,7 +62,10 @@ export default function ProjectAnalyticsScreen({ navigation }: any) {
 
       const [p, e] = await Promise.all([
         supabase.from('projects').select('*').eq('organization_id', prof.organization_id),
-        supabase.from('expenses').select('*').order('id', { ascending: false }),
+        supabase.from('expenses')
+          .select('*, vendor:vendors!vendor_id(name)')
+          .eq('organization_id', prof.organization_id)
+          .order('id', { ascending: false }),
       ])
 
       setProjects(p.data ?? [])
@@ -98,23 +101,7 @@ export default function ProjectAnalyticsScreen({ navigation }: any) {
   const budgetHealth = utilization > 100 ? 'Critical' : utilization > 70 ? 'Warning' : 'Healthy'
   const budgetHealthColor = budgetHealth === 'Healthy' ? '#4caf50' : budgetHealth === 'Warning' ? GOLD : '#ef5350'
 
-  const aiPrediction =
-    utilization > timelineProgress + 25 ? 'Budget Risk' :
-    timelineProgress > utilization + 25 ? 'Schedule Risk' :
-    utilization > 90                    ? 'Critical Risk' : 'On Track'
-
-  const aiColor =
-    aiPrediction === 'On Track'      ? '#4caf50' :
-    aiPrediction === 'Budget Risk'   ? GOLD :
-    aiPrediction === 'Schedule Risk' ? '#64b5f6' : '#ef5350'
-
-  const aiDesc: Record<string, string> = {
-    'On Track':      'Project spending and timeline are well aligned.',
-    'Budget Risk':   'Budget consumption is outpacing project progress.',
-    'Schedule Risk': 'Timeline progression is slower than expected.',
-    'Critical Risk': 'Project requires immediate executive attention.',
-  }
-
+  
   const riskLevel = sp
     ? sp.expenditure > sp.budget       ? 'Critical Risk'
     : sp.expenditure > sp.budget * 0.7 ? 'Medium Risk'
@@ -265,13 +252,6 @@ export default function ProjectAnalyticsScreen({ navigation }: any) {
               </View>
             </View>
 
-            {/* AI Insight */}
-            <View style={[styles.card, { borderColor: aiColor + '44' }]}>
-              <Text style={styles.eyebrow}>AI PROJECT INSIGHT</Text>
-              <Text style={[styles.aiTitle, { color: aiColor }]}>{aiPrediction}</Text>
-              <Text style={styles.cardSub}>{aiDesc[aiPrediction]}</Text>
-            </View>
-
             {/* Recent Purchases */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Recent Purchases</Text>
@@ -280,14 +260,14 @@ export default function ProjectAnalyticsScreen({ navigation }: any) {
               ) : projectPurchases.map((e, i) => (
                 <View key={e.id} style={[styles.purchaseRow, i === projectPurchases.length - 1 && { borderBottomWidth: 0 }]}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.purchaseTitle}>{e.title}</Text>
-                    <Text style={styles.purchaseSub}>{e.vendor || '—'} · {e.category}</Text>
+                    <Text style={styles.purchaseTitle}>{e.item}</Text>
+                    <Text style={styles.purchaseSub}>{e.vendor?.name || '—'} · {e.category}</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.purchaseAmt}>{fmt(e.amount)}</Text>
+                    <Text style={styles.purchaseAmt}>{fmt(e.total_amount)}</Text>
                     <Badge
-                      label={e.payment_status}
-                      color={e.payment_status === 'Paid' ? '#4caf50' : GOLD}
+                      label={e.status}
+                      color={e.status === 'Paid' ? '#4caf50' : GOLD}
                     />
                   </View>
                 </View>
@@ -386,7 +366,6 @@ const styles = StyleSheet.create({
   },
   miniStatVal: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
   miniStatLabel: { fontSize: 10, color: MUTED },
-  aiTitle: { fontSize: 20, fontWeight: '800', marginBottom: 6 },
   purchaseRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a2a1e', gap: 10,

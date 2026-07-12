@@ -7,6 +7,12 @@ import { supabase } from './src/lib/supabase'
 import LoginScreen from './src/screens/LoginScreen'
 import HomeScreen from './src/screens/HomeScreen'
 import ProjectAnalyticsScreen from './src/screens/ProjectAnalyticsScreen'
+import PettyCashScreen from './src/screens/PettyCashScreen'
+import ProcessPaymentScreen from './src/screens/ProcessPaymentScreen'
+import AdminPettyCashScreen from './src/screens/AdminPettyCashScreen'
+import AwardVendorScreen from './src/screens/AwardVendorScreen'
+import ApprovePaymentRequestScreen from './src/screens/ApprovePaymentRequestScreen'
+import UserManagementScreen from './src/screens/UserManagementScreen'
 import { savePushToken } from './src/lib/notifications'
 
 const Stack = createNativeStackNavigator()
@@ -46,6 +52,12 @@ useEffect(() => {
           <>
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="ProjectAnalytics" component={ProjectAnalyticsScreen} />
+            <Stack.Screen name="PettyCash" component={PettyCashScreen} />
+            <Stack.Screen name="ProcessPayment" component={ProcessPaymentScreen} />
+            <Stack.Screen name="AdminPettyCash" component={AdminPettyCashScreen} />
+            <Stack.Screen name="AwardVendor" component={AwardVendorScreen} />
+            <Stack.Screen name="ApprovePaymentRequest" component={ApprovePaymentRequestScreen} />
+            <Stack.Screen name="UserManagement" component={UserManagementScreen} />
           </>
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} />
