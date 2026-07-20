@@ -10,7 +10,7 @@ const GOLD = '#c9a84c'
 const DARK = '#0a1209'
 const MID  = '#152019'
 
-export default function LoginScreen() {
+export default function LoginScreen({ navigation }: any) {
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
   const [loading,  setLoading]  = useState(false)
@@ -126,6 +126,10 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity onPress={() => navigation.navigate('LandingPage')} style={{ marginTop: 20 }}>
+          <Text style={styles.learnMoreLink}>Learn More / About Geobase</Text>
+        </TouchableOpacity>
+
         <Text style={styles.footer}>
           Geobase Enterprise Resource Platform
         </Text>
@@ -229,5 +233,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#3a5a3d',
     letterSpacing: 1,
+  },
+  learnMoreLink: {
+    fontSize: 13,
+    color: GOLD,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 })

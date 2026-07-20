@@ -13,7 +13,14 @@ import AdminPettyCashScreen from './src/screens/AdminPettyCashScreen'
 import AwardVendorScreen from './src/screens/AwardVendorScreen'
 import ApprovePaymentRequestScreen from './src/screens/ApprovePaymentRequestScreen'
 import UserManagementScreen from './src/screens/UserManagementScreen'
+import PMScheduleScreen from './src/screens/PMScheduleScreen'
 import { savePushToken } from './src/lib/notifications'
+import FinanceReportsScreen from './src/screens/FinanceReportsScreen'
+import AuditorScreen from './src/screens/AuditorScreen'
+import ViewerScreen from './src/screens/ViewerScreen'
+import OrganizationProfileScreen from './src/screens/OrganizationProfileScreen'
+import PayslipBrandingScreen from './src/screens/PayslipBrandingScreen'
+import LandingPageScreen from './src/screens/LandingPageScreen'
 
 const Stack = createNativeStackNavigator()
 
@@ -58,9 +65,18 @@ useEffect(() => {
             <Stack.Screen name="AwardVendor" component={AwardVendorScreen} />
             <Stack.Screen name="ApprovePaymentRequest" component={ApprovePaymentRequestScreen} />
             <Stack.Screen name="UserManagement" component={UserManagementScreen} />
+            <Stack.Screen name="PMSchedule" component={PMScheduleScreen} />
+            <Stack.Screen name="FinanceReports" component={FinanceReportsScreen} />
+            <Stack.Screen name="Auditor" component={AuditorScreen} />
+            <Stack.Screen name="ViewerPortal" component={ViewerScreen} />
+            <Stack.Screen name="OrganizationProfile" component={OrganizationProfileScreen} />
+            <Stack.Screen name="PayslipBranding" component={PayslipBrandingScreen} />
           </>
         ) : (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="LandingPage" component={LandingPageScreen} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

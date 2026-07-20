@@ -25,6 +25,11 @@ const ADMIN_PETTY_CASH_ROLES = ['CEO']
 const AWARD_VENDOR_ROLES = ['Procurement Manager']
 const APPROVE_PAYMENT_ROLES = ['CEO', 'Finance Director']
 const USER_MANAGEMENT_ROLES = ['CEO']
+const PM_SCHEDULE_ROLES = ['Project Manager']
+const FINANCE_REPORTS_ROLES = ['Finance Director']
+const AUDITOR_ROLES = ['Auditor']
+const VIEWER_ROLES = ['Viewer']
+
 
 function DashboardTab({ profile, navigation }: { profile: any; navigation: any }) {
   const [stats, setStats] = useState({ projects: 0, requests: 0, notifications: 0 })
@@ -53,6 +58,10 @@ function DashboardTab({ profile, navigation }: { profile: any; navigation: any }
   const canAwardVendor = AWARD_VENDOR_ROLES.includes(profile?.role_name)
   const canApprovePayment = APPROVE_PAYMENT_ROLES.includes(profile?.role_name)
   const canManageUsers = USER_MANAGEMENT_ROLES.includes(profile?.role_name)
+  const canManageSchedule = PM_SCHEDULE_ROLES.includes(profile?.role_name)
+  const canViewFinanceReports = FINANCE_REPORTS_ROLES.includes(profile?.role_name)
+  const canViewAuditor = AUDITOR_ROLES.includes(profile?.role_name)
+  const canViewClientPortal = VIEWER_ROLES.includes(profile?.role_name)
 
   // tab: true items live inside this Tab.Navigator → navigation.navigate()
   // tab: false items are root-stack screens (outside the tab bar) → navigation.getParent()?.navigate()
@@ -83,6 +92,24 @@ function DashboardTab({ profile, navigation }: { profile: any; navigation: any }
        ...(canManageUsers
       ? [{ label: 'User Management', icon: '👥', target: 'UserManagement', isStack: true }]
       : []),
+       ...(canManageSchedule
+      ? [{ label: 'Weekly Schedule', icon: '📅', target: 'PMSchedule', isStack: true }]
+      : []),
+      ...(canViewFinanceReports
+      ? [{ label: 'Financial Reports', icon: '📈', target: 'FinanceReports', isStack: true }]
+      : []),
+      ...(canViewAuditor
+      ? [{ label: 'Audit Overview', icon: '🛡️', target: 'Auditor', isStack: true }]
+      : []),
+      ...(canViewClientPortal
+      ? [{ label: 'My Project', icon: '🏢', target: 'ViewerPortal', isStack: true }]
+      : []),
+      ...(canViewAdminPettyCash
+      ? [{ label: 'Org Profile', icon: '🏢', target: 'OrganizationProfile', isStack: true }]
+      : []),
+      ...(canViewAdminPettyCash
+  ? [{ label: 'Payslip Branding', icon: '🧾', target: 'PayslipBranding', isStack: true }]
+  : []),
   ]
 
   return (

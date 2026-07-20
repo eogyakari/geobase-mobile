@@ -25,6 +25,23 @@ function ProgressBar({ value, color = GOLD }: { value: number; color?: string })
   )
 }
 
+function MiniBarChart({ data, color = GOLD }: { data: { label: string; value: number }[]; color?: string }) {
+  const max = Math.max(...data.map(d => d.value), 1)
+  const chartHeight = 90
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: chartHeight + 30 }}>
+      {data.map((d, i) => (
+        <View key={i} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+          <Text style={{ fontSize: 8, color: MUTED }}>{d.value > 0 ? Math.round(d.value / 1000) + 'k' : ''}</Text>
+          <View style={{ width: '100%', height: Math.max(d.value > 0 ? 3 : 0, (d.value / max) * chartHeight), backgroundColor: color, borderRadius: 3 }} />
+          <Text style={{ fontSize: 8, color: MUTED }}>{d.label}</Text>
+        </View>
+      ))}
+    </View>
+  )
+}
+
+
 function Badge({ label, color }: { label: string; color: string }) {
   return (
     <View style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, backgroundColor: color + '22', borderWidth: 1, borderColor: color + '44' }}>
@@ -114,6 +131,52 @@ export default function ProjectAnalyticsScreen({ navigation }: any) {
   const projectPurchases = sp
     ? expenses.filter(e => e.project_id === sp.id).slice(0, 6)
     : []
+
+  const projectExpenses = sp ? expenses.filter(e => e.project_id === sp.id) : []
+
+  const monthlySpend = (() => {
+    if (!sp) return []
+    const now = new Date()
+    const months: { key: string; label: string; value: number }[] = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleDateString('en-GB', { month: 'short' }), value: 0 })
+    }
+    projectExpenses.forEach(e => {
+      if (!e.expense_date) return
+      const d = new Date(e.expense_date)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const m = months.find(mo => mo.key === key)
+      if (m) m.value += Number(e.total_amount || 0)
+    })
+    return months
+  })()
+
+  const monthsWithSpend = monthlySpend.filter(m => m.value > 0)
+  const burnRate = monthsWithSpend.length > 0
+    ? monthsWithSpend.reduce((s, m) => s + m.value, 0) / monthsWithSpend.length
+    : 0
+
+  const remainingForProject = sp ? Number(sp.budget || 0) - Number(sp.expenditure || 0) : 0
+  const monthsUntilExhausted = burnRate > 0 && remainingForProject > 0 ? remainingForProject / burnRate : null
+  const exhaustionDate = monthsUntilExhausted !== null
+    ? new Date(new Date().setMonth(new Date().getMonth() + Math.ceil(monthsUntilExhausted)))
+    : null
+  const exhaustsEarly = exhaustionDate && sp?.end_date && exhaustionDate < new Date(sp.end_date)
+
+  const categoryBreakdown = (() => {
+    const map: Record<string, number> = {}
+    projectExpenses.forEach(e => { const cat = e.category ?? 'Uncategorised'; map[cat] = (map[cat] ?? 0) + Number(e.total_amount || 0) })
+    return Object.entries(map).map(([cat, amt]) => ({ cat, amt })).sort((a, b) => b.amt - a.amt)
+  })()
+
+  const vendorBreakdown = (() => {
+    const map: Record<string, number> = {}
+    projectExpenses.forEach(e => { const v = e.vendor?.name ?? 'Unknown'; map[v] = (map[v] ?? 0) + Number(e.total_amount || 0) })
+    return Object.entries(map).map(([vendor, amt]) => ({ vendor, amt })).sort((a, b) => b.amt - a.amt).slice(0, 6)
+  })()
+
+  const projectTotal = categoryBreakdown.reduce((s, c) => s + c.amt, 0)
 
   if (loading) {
     return (
@@ -252,6 +315,63 @@ export default function ProjectAnalyticsScreen({ navigation }: any) {
               </View>
             </View>
 
+            {/* Spend Trend, Burn Rate & Forecast */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Monthly Spend Trend</Text>
+              <View style={{ marginTop: 10 }}>
+                <MiniBarChart data={monthlySpend} color={GOLD} />
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                <View style={styles.miniStat}>
+                  <Text style={[styles.miniStatVal, { color: GOLD, fontSize: 14 }]}>{fmt(burnRate, sp.currency)}</Text>
+                  <Text style={styles.miniStatLabel}>Avg. Monthly Burn</Text>
+                </View>
+                <View style={styles.miniStat}>
+                  <Text style={[styles.miniStatVal, { color: exhaustionDate ? '#ef5350' : '#4caf50', fontSize: 14 }]}>
+                    {exhaustionDate ? exhaustionDate.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Not projected'}
+                  </Text>
+                  <Text style={styles.miniStatLabel}>Est. Budget Exhaustion</Text>
+                </View>
+              </View>
+              {exhaustsEarly && (
+                <View style={styles.warningBanner}>
+                  <Text style={styles.warningText}>⚠ At this burn rate, budget runs out before the project's end date.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Category breakdown */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Spend by Category</Text>
+              {categoryBreakdown.length === 0 ? (
+                <Text style={styles.emptyText}>No expenses recorded.</Text>
+              ) : categoryBreakdown.map(({ cat, amt }) => (
+                <View key={cat} style={{ marginTop: 12 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, color: WHITE }}>{cat}</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: GOLD }}>{fmt(amt, sp.currency)}</Text>
+                  </View>
+                  <ProgressBar value={projectTotal > 0 ? (amt / projectTotal) * 100 : 0} color={GOLD} />
+                </View>
+              ))}
+            </View>
+
+            {/* Vendor breakdown */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Top Vendors</Text>
+              {vendorBreakdown.length === 0 ? (
+                <Text style={styles.emptyText}>No expenses recorded.</Text>
+              ) : vendorBreakdown.map(({ vendor, amt }) => (
+                <View key={vendor} style={{ marginTop: 12 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, color: WHITE }}>{vendor}</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#64b5f6' }}>{fmt(amt, sp.currency)}</Text>
+                  </View>
+                  <ProgressBar value={projectTotal > 0 ? (amt / projectTotal) * 100 : 0} color="#64b5f6" />
+                </View>
+              ))}
+            </View>
+
             {/* Recent Purchases */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Recent Purchases</Text>
@@ -374,6 +494,8 @@ const styles = StyleSheet.create({
   purchaseSub: { fontSize: 11, color: MUTED, marginTop: 2 },
   purchaseAmt: { fontSize: 13, fontWeight: '700', color: GOLD, marginBottom: 4 },
   backToAllBtn: { alignItems: 'center', paddingVertical: 16 },
+  warningBanner: { marginTop: 14, backgroundColor: '#2e1a0e', borderWidth: 1, borderColor: '#ef535044', borderRadius: 10, padding: 10 },
+  warningText: { color: '#ef5350', fontSize: 11, lineHeight: 16 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: MID, borderTopLeftRadius: 20, borderTopRightRadius: 20,
